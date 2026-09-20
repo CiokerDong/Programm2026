@@ -204,26 +204,83 @@ def ist_der_Ton_aufgelöst(Ton, stream, Stimmen,Einzele_Stimme_slices, Anfang_Mo
         return "nicht Aufgelöst" 
 
 
-def Einfache_Analyse(n1: note.Note,n2: note.Note,score_slices):
+
+def isSynpoke(n,offset,Modusanfang):
+
+    Tie=n.tie.type if n.tie else None
+
+    if (offset < Modusanfang or
+         (offset == Modusanfang and Tie in ("stop", "continue"))):
+        return True
+    return False
+
+def Standart_Analyse(n1,n2,score_slices,Modus=None,Annotationston=None):
 
     o1=n1.abs_offset
     o2=n2.abs_offset
     d1=n1.quarterLength
     d2=n2.quarterLength
     
+    if not Annotationston:
+        Annotationston = n1 if d1>d2 else n2
+    oA=Annotationston.abs_offset if Annotationston else None
+
+    Synpoke1=isSynpoke(n1,o1,oA)
+    Synpoke2=isSynpoke(n2,o2,oA)
+
+    #Sonderfall
+    if (Synpoke1 and o2==oA) or (Synpoke2 and o1==oA):
+        print(n1.Takt_Nr,n1.offset_Takt,n2.offset_Takt,n1.name,n2.name,Synpoke1,Synpoke2)
+        return n1 if Synpoke1 else n2
+
     if o1 != o2:
         return n1 if o1 > o2 else n2
 
-    if d1 != d2:
-        return n1 if d1 < d2 else n2
-    
+    Dissonanz=Analyse_durchAnnotationston(n1, n2, Annotationston)
+    if Dissonanz:
+        return Dissonanz
     n1_ist_Transition = ist_Transition(n1, score_slices, modus="Original_Slices")
     n2_ist_Transition = ist_Transition(n2, score_slices, modus="Original_Slices")
-
     if n1_ist_Transition != n2_ist_Transition:
         return n1 if n1_ist_Transition else n2
+    if d1 != d2:
+        return n1 if d1 < d2 else n2
+    print("unbekannte Dissonanz",o1.Takt_Nr, o1.offset_Takt)
 
 
-    return "unbekannte Dissonanz, Takt_Nr:", n1.Takt_Nr, n1.offset_Takt, n1.nameWithOctave
+def Analyse_durchAnnotationston(n1: note.Note,n2: note.Note,Annotationston: note.Note):
+    """
+    Vergleicht zwei Noten n1 und n2 anhand eines Annotationstons.
+    Die Note, die näher am Annotationston liegt, wird bevorzugt.
+    """
+    # Berechne die Intervalle zwischen den Noten und dem Annotationston
+    Intervall_1 = interval.Interval(n1, Annotationston)
+    Intervall_2 = interval.Interval(n2, Annotationston)
+
+    if Intervall_1.isConsonant() != Intervall_2.isConsonant():
+        if not Intervall_1.isConsonant():
+            return n1              #erste Note ist Dissonanz, zweite Partnerton
+        else:
+            return n2
+    else:
+        return None
 
  
+def Dominant_unterTerz(Klang,note,score_slices):
+
+    if Klang.commonName in ["dominant seventh chord", "incomplete dominant-seventh chord"]:
+        return None
+    
+    if Klang.intervalFromChordStep(5) and Klang.intervalFromChordStep(5).simpleName == 'd5':
+        Bass = min(Klang, key=lambda n: n.pitch.midi)
+        Intevall= interval.Interval(Bass, note)
+        Schrittweise=None
+        if note.pitch.midi < Bass.pitch.midi and Intevall.simpleName == "M3":
+           Schrittweise = ist_Transition(note, score_slices, modus="Original_Slices")
+        if not Schrittweise:
+            return note
+    return None
+
+
+
+

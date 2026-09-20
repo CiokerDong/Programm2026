@@ -27,19 +27,10 @@ def haben_vertikale_Überlappung(noten, TOL: float = 1e-6) -> bool:
     return False
 
 
-#Modus: Dissonanter_Klang   
-#F: "Wiederholte Dissonanz aus der Figurierung weglassen". Dieses Modus deutet eine figurierte Wiederholungsdissonanz, die nur einmal gezählt werden soll. Sie könne sowohl wesentliche als auch zufällige Dissonanz ist. 
-#G: "Grundton ist Dissonanz". Dieses Modus ist für jenen Quartsext- order Terzquartakkorde gerichtet, deren Grundton als Dissonanz aufgelöst werden muss. z.B. der kadenzierende QuartsexteAkkrod.
-#Z: "zusätzliche Dissonanz mit gleichem Tonnamen neben der Wiederholte Dissonanz haben". Das ist eine Ergänzung für die F. In diesem Modus gibt es neben der figurierte Wiederholungsdissonanz auch eine zusätzliche Dissonanz mit gleichen Tonnamen aber
-# in einer anderen Oktavelage, die auch dissonant klingt und eine andere Einfürung bzw. Auflösungsweise hat und deshalb zusätzlich einmal gezählt wird.
-#D: "alle definierten akkordeigenen Dissonanzen markieren, die in diesem Abschnittt vorkommen". Dieses Modus passt zu diesen Sonderfällen, wo keine Akkorddissonanz 
-# wegen der Figurierung vertikal dissonant klingt. und die Ergebnisse entsprechen auch dem Prinzip des Moduses "F".
 #O: "Oktavedoppelte Dissonanz weglassen". In diesem Modus wird die Dissonanz oktavedoppelt und die niederigere Dissonanz ignoriert. 
 #Of:"oktavedoppelter Dissonanz in der Figurierung weglassen"
 #B: Den Basston im angegebenen Klang als Dissonanz ansehen, der Ton über dem Bass ist der tatsächliche Akkordton.
-#K:"den Abschnitt zwingend zum Modus konsonanten Satz machen"
-#A:"Alberti-bass" sowie andere dem ähnliche Gebrochene Akkorde
-#H:"der Originalmusik die Annotationsnote als einen virtuellen Bass hinzufügen"
+
 
 def Modi_auf_der_Hiflsstimme(score: stream.Score,Grenzen,Original_Slices,hilfsstimme_index: int = -1):
     Stimmen = list(score.parts)

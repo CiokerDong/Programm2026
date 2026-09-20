@@ -430,14 +430,12 @@ def finde_passenden_Sliceoffset(Original_Slices,Anfang,Grenzen,Ende=None,modus="
             "modus muss 'mehrere_noten' oder 'neue_tonhoehe' sein."
         )
     
-def ist_Konsonantes_Intervall(note1,note2,Bass=None,Intervall=None):
+def ist_Konsonantes_Intervall(note1,note2,Bass):
     Intervall = interval.Interval(note1,note2)
-    if Bass:
-        Unterer = note1 if note1.pitch.midi <= note2.pitch.midi else note2
-        Intervallname = Intervall.simpleName
-        ist_Konsonant = (Unterer.nameWithOctave != Bass.nameWithOctave) if Intervallname == 'P4' else Intervall.isConsonant()
-    else:
-        ist_Konsonant = Intervall.isConsonant() 
+    Unterer = note1 if note1.pitch.midi <= note2.pitch.midi else note2
+    Intervallname = Intervall.simpleName
+    ist_Konsonant = (Unterer.nameWithOctave != Bass.nameWithOctave) if Intervallname == 'P4' else Intervall.isConsonant()
+
     if ist_Konsonant:
         return True
     else:

@@ -1,4 +1,4 @@
-from music21 import note, chord, interval
+from music21 import stream,note, chord, interval
 from Notenbearbeitung import Noten_am_Offset, ist_Transition,notes_in_time_span
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence
@@ -35,7 +35,7 @@ class HarmonischerRhythmusSlice:
         )
 
 
-class HarmonischerRhythmusKontext:
+class HarmonischerKontext:
     """Verwaltet den aktiven Harmonieabschnitt während des Offset-Scans."""
 
     def __init__(self):
@@ -71,6 +71,7 @@ class HarmonischerRhythmusKontext:
         self.aktiver_Slice = HarmonischerRhythmusSlice(
             Anfang=zeit,
             Ende=ende,
+            Klang=chord.Chord(Töne_am_Anfang),
             Gerüstbass=gerüstbass,
             Klangdissonanzname=Dissonantklang,
             Tönenamen=Tönenamen
@@ -208,8 +209,7 @@ def ist_Ein_Septakkord(Klang,Zahl=None,Töne_im_Bereich=None,Offset=None):
                 if Auflösung == 'Grundton':
                   return 24
             return 24
-    elif len(Einfachklang.notes) == 3:
-        if Septime and Grundton and (Terz or Quinte):
+    elif Klang.isIncompleteSeventh():
             if Grundton.name == Bass.name:
                 if Terz and Töne_im_Bereich:
                     Auflösung = Wie_ein_Klang_aufgelöst('37',Töne_im_Bereich,None,None,Septime)
@@ -225,8 +225,7 @@ def ist_Ein_Septakkord(Klang,Zahl=None,Töne_im_Bereich=None,Offset=None):
                     Auflösung = Wie_ein_Klang_aufgelöst('34',Töne_im_Bereich,None,None,Grundton,Offset)
                     return 34 if Auflösung == '34' else False
                 return 34
-            elif Septime.name == Bass.name:#
-                #print('Grundton für 24',Klang,Grundton.nameWithOctave)
+            elif Septime.name == Bass.name:
                 if Terz:
                     return 24
                 elif Quinte:
@@ -234,21 +233,21 @@ def ist_Ein_Septakkord(Klang,Zahl=None,Töne_im_Bereich=None,Offset=None):
                         Auflösung = Wie_ein_Klang_aufgelöst('26',Töne_im_Bereich,None,Grundton,None,Offset=None)
                         return 24 if Auflösung == '26' else False
                     return 24
-        else:
-            Zufällige_Dissonanz=True
-            Intervalle=Intervalls_von_Basston_im_Akkord(Einfachklang)
-            Intervallzahle = ''.join(str(i.generic.value) for i in Intervalle)
-            if Intervallzahle in ['26','67','57']:
-                Note1 = Bass
-                Note2 = finden_Note_über_Bass(Klang, int(Intervallzahle[0]))
-                Note3 = finden_Note_über_Bass(Klang, int(Intervallzahle[1]))
-                Auflösung = Wie_ein_Klang_aufgelöst(Intervallzahle,Töne_im_Bereich,Note1,Note2,Note3,Offset)
-                if Auflösung in ['24','26','57','37']:
-                    return Auflösung
     elif Zahl and Zahl in [34,56,37,57,24,26]:
         return Zahl
     else:
-        return False
+        Zufällige_Dissonanz=True
+        Intervalle=Intervalls_von_Basston_im_Akkord(Einfachklang)
+        Intervallzahle = ''.join(str(i.generic.value) for i in Intervalle)
+        if Intervallzahle in ['26','67','57','47']:
+            Note1 = Bass
+            Note2 = finden_Note_über_Bass(Klang, int(Intervallzahle[0]))
+            Note3 = finden_Note_über_Bass(Klang, int(Intervallzahle[1]))
+            Auflösung = Wie_ein_Klang_aufgelöst(Intervallzahle,Töne_im_Bereich,Note1,Note2,Note3,Offset)
+            if Auflösung in ['24','26','57','37']:
+                return int(Auflösung)
+
+    return False
     
 def Beurteilung_dissonanten_Klangs(
     Objekt, Zahl=None, Kennzeichen=None, Modusanfang=None, Töne_im_Bereich=None,
@@ -276,32 +275,36 @@ def Beurteilung_dissonanten_Klangs(
         'Basston': None,
         'zusätzliche_Konsonanz':None
     }
-    
-#die Inforamtionen, die vor der Klangvorständigung festgestellt werden müssen:
 
- 
     Umkehrung = Objekt.inversion()
     Alle_Akkordtöne=list(Objekt.notes)
-    Nonee=None
     Akkord = Objekt.closedPosition()
     Akkordtöne = list(Akkord.notes)
-    Töne_name = {n.name for n in Akkordtöne if isinstance(n, note.Note)}
-    result['akkordtöne'] = Töne_name 
-    
+    Namen_im_Klanggerüst = {n.name for n in Akkordtöne if isinstance(n, note.Note)}
+  
+    Septakkordzieffer= {7,37,57,357,34,346,56,356,2,24,26,246}
+
     oberste_note = max(Alle_Akkordtöne, key=lambda n: n.pitch.midi)
     Basston = min(Alle_Akkordtöne, key=lambda n: n.pitch.midi)
-
     Grundton = note.Note(Objekt.root()) if Objekt.root() else None
-    Terz = note.Note(Objekt.third) if Objekt.third else None
     Quinte = note.Note(Objekt.fifth) if Objekt.fifth else None
     Septime = note.Note(Objekt.seventh) if Objekt.seventh else None
 
-    result['Grundton'] = Grundton
-
     if Zahl is None:
         Zahl = Generalbassbezifferung(Akkordtöne, Basston)
-
+    
     Septakkord=ist_Ein_Septakkord(Objekt,Zahl,Töne_im_Bereich,Modusanfang)
+
+    if Septakkord and Zahl not in Septakkordzieffer:
+        Klanggerüst = Bildung_Klanggerüst(Töne_im_Bereich, Septakkord, Basston)
+        Namen_im_Klanggerüst = {n.name for n in Klanggerüst.notes}
+        Grundton = note.Note( Klanggerüst.root()) if  Klanggerüst.root() else None
+        Terz = note.Note( Klanggerüst.third) if Klanggerüst.third else None
+        Quinte = note.Note(Klanggerüst.fifth) if Klanggerüst.fifth else None
+        Septime = note.Note(Klanggerüst.seventh) if Klanggerüst.seventh else None
+
+    result['akkordtöne'] = Namen_im_Klanggerüst 
+    result['Grundton'] = Grundton
 
     def Annotationston_ist_Transition():
         if Hilfstimme_Kontext is None:
@@ -315,22 +318,27 @@ def Beurteilung_dissonanten_Klangs(
             result['dissonant_notes'] = [Septime,Basston]
     else:
         if len(Akkordtöne) == 2:
-            if Zahl == 7:
+            #print("Quarte",Modusanfang,Akkord.intervalFromChordStep(5))
+            if Akkord.intervalFromChordStep(7) and Akkord.intervalFromChordStep(3).simpleName in['m7','M2']:
                 result['dissonant_notes'] = [oberste_note]
-            elif Zahl == 2:
-                result['dissonant_notes'] = [Basston]
-            elif Zahl == 4:
-                if interval.Interval(Akkordtöne[0], Akkordtöne[1]).simpleName == 'P4':
-                    wie=Wie_ein_Klang_aufgelöst("allgemeiner Klang",Töne_im_Bereich,None,None,oberste_note)
-                    if wie== 'Grundton':
+            elif Akkord.intervalFromChordStep(5):
+                for Quarte in Töne_im_Bereich:
+                    if Quarte.nameWithOctave == oberste_note.nameWithOctave:
+                        parent = Quarte.getContextByClass(stream.Part)
+                        break
+                Töne_inStimme=[]
+                for Töne in Töne_im_Bereich:
+                    if Töne.getContextByClass(stream.Part) is parent:
+                        Töne_inStimme.append(Töne)
+                wie=Wie_ein_Klang_aufgelöst("allgemeiner Klang",Töne_inStimme,None,None,oberste_note)
+                if wie== 'Grundton':
+                    if Akkord.intervalFromChordStep(5).simpleName == 'A4':
+                        result['dissonant_notes'] = [Basston]
+                    elif Akkord.intervalFromChordStep(5).simpleName == 'P4':
+                        result['dissonant_notes'] = [Basston if Annotationston_ist_Transition() else Grundton]
+                    elif Akkord.intervalFromChordStep(5).simpleName == 'd5':
                         result['dissonant_notes'] = [oberste_note]
-                elif interval.Interval(Akkordtöne[0], Akkordtöne[1]).simpleName == 'A4':
-                    result['dissonant_notes'] = [Basston]
-                else:
-                    print('Unbekannte Quartegerüst:',Modusanfang)
-            elif Zahl == 5 and interval.Interval(Akkordtöne[0], Akkordtöne[1]).simpleName == 'd5':
-                result['dissonant_notes'] = [oberste_note]
-            elif Zahl == 6 and interval.Interval(Akkordtöne[0], Akkordtöne[1]).simpleName == 'A6': #übermäßige Sexte
+            elif Akkord.intervalFromChordStep(3) and Akkord.intervalFromChordStep(3).simpleName == 'A6': #übermäßige Sexte
                 result['dissonant_notes'] = [Basston,oberste_note]
             else:
                 #print('Fehler bei 2-Tönige_Klanggerüst::was ist die Klangdissonanz???','Modusanfang:',Modusanfang)
@@ -346,25 +354,6 @@ def Beurteilung_dissonanten_Klangs(
                     result['dissonant_notes'] = [Basston,oberste_note]
         elif Septakkord:
             result['Septakkord'] = True
-            if isinstance(Septakkord, str):
-                gefundene_Töne = [Basston]
-                for zahl in Septakkord:
-                    ziel_intervall = int(zahl)
-                    for Ton in sorted(Töne_im_Bereich, key=lambda x: x.offset):
-                        intervall = interval.Interval(Basston, Ton)
-                        if (
-                            intervall.generic.simpleDirected == ziel_intervall
-                            and Ton.pitch.midi > Basston.pitch.midi
-                        ):
-                            gefundene_Töne.append(Ton)
-                            break
-                Akkordtöne = gefundene_Töne
-                Töne_name = {n.name for n in Akkordtöne if isinstance(n, note.Note)}
-                result['akkordtöne'] = Töne_name 
-                Akkord = chord.Chord(gefundene_Töne)
-                Grundton = note.Note(Akkord.root()) if Akkord.root() else None
-                Quinte = note.Note(Akkord.fifth) if Akkord.fifth else None
-                Septime = note.Note(Akkord.seventh) if Akkord.seventh else None
             if Akkord.commonName in ['diminished seventh chord',
                             'enharmonic equivalent to diminished triad',
                             'incomplete half-diminished seventh chord',
@@ -374,16 +363,17 @@ def Beurteilung_dissonanten_Klangs(
                 if Umkehrung in [0,1,3]:
                     result['dissonant_notes'] = [Septime]
                 elif Umkehrung == 2:
-                    #print(Modusanfang,Objekt,Akkord.commonName)
                     result['dissonant_notes'] = [Septime,Quinte]
                 else:
                     print('Bug-Meldung:Unbekante Vierklangsumkehrung:',Modusanfang,Objekt)
+        elif Zahl == 45:
+            Quarte = finden_Note_über_Bass(Akkord, 4)
+            result['dissonant_notes'] = [Quarte]
     return result
 
 def Beurteilung_dissonanten_Klangs2(Objekt,Vollständigung=None,Anfang=None,Grenzen=None,score_slices=None,
     Annotationskennzeichen=None,Töne_im_Bereich=None,i=None
 ):
-    
     if not isinstance(Objekt, chord.Chord):
         raise TypeError
     
@@ -1079,6 +1069,29 @@ def Wie_ein_Klang_aufgelöst(Klang,Noten_im_Bereich,Note1=None,Note2=None,Note3=
             return "36"
         return "37"
 
+    if Klang=="56":
+        Quinte_candidates = []
+        Quarte_candidates = []
+        Quinte=Note2
+        for n in Noten_im_Bereich:
+            if n.nameWithOctave==Quinte.nameWithOctave:
+                Quinte_candidates.append(n)
+        Quinte_note = sorted(Quinte_candidates, key=lambda n: (n.offset, n.pitch.midi))[0]
+        Quarte_end = Quarte_note.offset + Quarte_note.quarterLength
+        Quarte_candidates = []
+
+        for n in Noten_im_Bereich:
+            if n.offset < Quarte_end:
+                continue
+            else:
+                iv_from_Quarte = interval.Interval(Quarte_note, n)
+                if iv_from_Quarte.generic.directed == -2:
+                    Quarte_candidates.append(n) 
+        offset_letzter_5 = max(n.offset for n in Quinte_candidates)
+        if Quarte_candidates and max(n.offset for n in Quarte_candidates) > offset_letzter_5:
+            return "46"
+        return "56"
+
     elif Klang=="34":
         Quarte=Note3
         Quarte_candidates = []
@@ -1378,11 +1391,8 @@ def Wie_ein_Klang_aufgelöst(Klang,Noten_im_Bereich,Note1=None,Note2=None,Note3=
             Intevall_mit_Sexte= interval.Interval(Sexte_note, n)
             if n.offset >= Sexte_end and Intevall_mit_Sexte.generic.directed == -2:
                 Quinte_candidates.append(n)
-
-        offset_letzter_5 = max(n.offset for n in Quinte_candidates)
         offset_letzter_6 = max(n.offset for n in Sexte_candidates)
-
-        if Quinte_candidates and offset_letzter_5 > offset_letzter_6:
+        if Quinte_candidates and max(n.offset for n in Quinte_candidates) > offset_letzter_6:
             return "57"
         else: 
             return "67" 
