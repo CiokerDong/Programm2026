@@ -230,7 +230,7 @@ def Standart_Analyse(n1,n2,score_slices,Modus=None,Annotationston=None):
 
     #Sonderfall
     if (Synpoke1 and o2==oA) or (Synpoke2 and o1==oA):
-        print(n1.Takt_Nr,n1.offset_Takt,n2.offset_Takt,n1.name,n2.name,Synpoke1,Synpoke2)
+        #print(n1.Takt_Nr,n1.offset_Takt,n2.offset_Takt,n1.name,n2.name,Synpoke1,Synpoke2)
         return n1 if Synpoke1 else n2
 
     if o1 != o2:
@@ -245,7 +245,7 @@ def Standart_Analyse(n1,n2,score_slices,Modus=None,Annotationston=None):
         return n1 if n1_ist_Transition else n2
     if d1 != d2:
         return n1 if d1 < d2 else n2
-    print("unbekannte Dissonanz",o1.Takt_Nr, o1.offset_Takt)
+    print("unbekannte Dissonanz",n1.Takt_Nr, n1.offset_Takt,n1,n2)
 
 
 def Analyse_durchAnnotationston(n1: note.Note,n2: note.Note,Annotationston: note.Note):
@@ -259,9 +259,11 @@ def Analyse_durchAnnotationston(n1: note.Note,n2: note.Note,Annotationston: note
 
     if Intervall_1.isConsonant() != Intervall_2.isConsonant():
         if not Intervall_1.isConsonant():
-            return n1              #erste Note ist Dissonanz, zweite Partnerton
+            return n1             
         else:
             return n2
+    elif not Intervall_1.isConsonant() and not Intervall_2.isConsonant():
+        return n1  
     else:
         return None
 
@@ -282,5 +284,21 @@ def Dominant_unterTerz(Klang,note,score_slices):
     return None
 
 
+def ist_zusätzliche_Ton_konsonant(Note,Klang,Töne,Urklang=None):
 
+    if Klang.isSeventh() or Klang.isIncompleteSeventh() or Klang.isTriad():
+        if Note.pitch == Klang.third:
+            return True
+        if Klang.fifth and Note.pitch == Klang.fifth and Klang.intervalFromChordStep(5).simpleName=="P5":
+            return True
+        if Note.pitch== Klang.root():
+            Auflösung=Wie_ein_Klang_aufgelöst("allgemeiner Klang",Töne,None,None,Note)
+            if Auflösung=="Grundton":
+                return True
+    return False
 
+def konsonante_Quarte(Kategorie,Quarte,Bass):
+    if Kategorie in ['46','34']:
+        if Quarte.name == Bass.name and Quarte.nameWithOctave != Bass.nameWithOctave:
+            return True
+    return False

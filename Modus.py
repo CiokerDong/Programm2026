@@ -63,20 +63,20 @@ def Modi_auf_der_Hiflsstimme(score: stream.Score,Grenzen,Original_Slices,hilfsst
             if Zahlen == 0: 
                 Klanggerüst=chord.Chord(Töne_im_Bereich)
                 Klanggerüst_alle=Klanggerüst
-                Beurteilung = Beurteilung_dissonanten_Klangs(
-                    Klanggerüst, Zahlen, Kennzeichen, Anfang,
-                    Hilfstimme_Kontext=(Annotationston, Elemente, i0)
-                )
-                Dissonanzakkord = Beurteilung.get('dissonanter_Akkord')
-                if Dissonanzakkord:
-                    Akkorddissonanz = Beurteilung.get('dissonant_notes')
-                    Akkordeigene_Töne = Beurteilung.get('akkordtöne')
             else:
                 Klanggerüst = Bildung_Klanggerüst(Töne_im_Bereich, Zahlen, El)
-                Töne_am_Modusanfang = list(Noten_am_Offset(Original_Slices, Anfang) or [])
-                Namen_im_Klanggerüst = {n.name for n in Klanggerüst.notes}
-                Töne_am_Modusanfang = [n for n in Töne_am_Modusanfang if n.name not in Namen_im_Klanggerüst]
-                Klanggerüst_alle = chord.Chord(list(Klanggerüst.notes) + Töne_am_Modusanfang)
+            Töne_am_Modusanfang = list(Noten_am_Offset(Original_Slices, Anfang) or [])
+            Namen_im_Klanggerüst = {n.name for n in Klanggerüst.notes}
+            Beurteilung = Beurteilung_dissonanten_Klangs(
+                Klanggerüst, Zahlen, Kennzeichen, Anfang,
+                Hilfstimme_Kontext=(Annotationston, Elemente, i0)
+            )
+            Akkorddissonanz = Beurteilung.get('dissonant_notes')
+            Akkordeigene_Töne = Beurteilung.get('akkordtöne')
+            Kategorie=Beurteilung.get('category')
+            #print(El.offset,Klanggerüst)
+            Töne_am_Modusanfang = [n for n in Töne_am_Modusanfang if n.name not in Namen_im_Klanggerüst]
+            Klanggerüst_alle = chord.Chord(list(Klanggerüst.notes) + Töne_am_Modusanfang)
             Geruesttoene_nur_einstimmig=None
             if len(Klanggerüst.notes) == 2:
                 Namen_im_Klanggerüst = {n.name for n in Klanggerüst.notes}
@@ -101,6 +101,7 @@ def Modi_auf_der_Hiflsstimme(score: stream.Score,Grenzen,Original_Slices,hilfsst
                     'Töne_am_Anfang':Klanggerüst_alle,
                     'Anfang': Anfang,
                     'Zahl':Zahlen,
+                    'Kategorie':Kategorie,
                     'Ende': Ende,
                     'Annotationston': Annotationston,
                     'Hilfstimme_Kontext': (Annotationston, Elemente, i0),
