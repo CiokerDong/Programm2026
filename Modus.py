@@ -79,18 +79,20 @@ def Modi_auf_der_Hiflsstimme(score: stream.Score,Grenzen,Original_Slices,hilfsst
             Klanggerüst_alle = chord.Chord(list(Klanggerüst.notes) + Töne_am_Modusanfang)
             Geruesttoene_nur_einstimmig=None
             if len(Klanggerüst.notes) == 2:
-                Namen_im_Klanggerüst = {n.name for n in Klanggerüst.notes}
+                Namen_im_Klanggerüst = {n.nameWithOctave for n in Klanggerüst.notes}
                 alle_Gerüsttöne = [
                     n for n in Töne_im_Bereich
-                    if n.name in Namen_im_Klanggerüst
+                    if n.nameWithOctave in Namen_im_Klanggerüst
                 ]
                 alle_Gerüsttönename = [n.nameWithOctave for n in alle_Gerüsttöne]
 
                 # Nur beurteilen, wenn kein Geruestton in gleicher Oktavlage
                 # mehrfach in der Begleitungsstimme vorkommt.
                 if len(alle_Gerüsttönename) == len(set(alle_Gerüsttönename)):
+                    
                     Geruesttoene_vertikal_ueberlappt = haben_vertikale_Überlappung(alle_Gerüsttöne)
                     Geruesttoene_nur_einstimmig = not Geruesttoene_vertikal_ueberlappt
+                    print(Anfang,alle_Gerüsttöne,Geruesttoene_vertikal_ueberlappt)
             if not Geruesttoene_nur_einstimmig:
                 if Klanggerüst is None:
                     print("框架是None!!!:", Anfang)
@@ -109,7 +111,7 @@ def Modi_auf_der_Hiflsstimme(score: stream.Score,Grenzen,Original_Slices,hilfsst
                     'Akkordeigene_Töne':Akkordeigene_Töne,
                     'Akkorddissonanz': Akkorddissonanz
                 })
-            else:
+            else:   
                 MODI.append({
                     'Modus': 'Alberti_mit_Kontrapunkt',
                     'Kennzeichen': Kennzeichen,

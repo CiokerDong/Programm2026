@@ -196,9 +196,6 @@ def ist_Transition(Zielnote: note.Note, Quelle, modus="Hilfstimme",
                    Zielindex=None, TOL=INTEGRATION_TOL) -> bool:
     """Prüft, ob ``Zielnote`` von beiden Seiten sekundweise erreicht wird."""
 
-    if not isinstance(Zielnote, note.Note):
-        return False
-
     def ist_Sekunde(n1, n2):
         if not isinstance(n1, note.Note) or not isinstance(n2, note.Note):
             return False

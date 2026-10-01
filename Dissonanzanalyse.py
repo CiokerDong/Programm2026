@@ -1,5 +1,6 @@
 
 from music21 import chord, interval, converter, note
+import music21_chord_extensions  # Register the project's Chord.isIncompleteSeventh method.
 from Notenbearbeitung import Noten_am_Offset,notes_in_time_span,ist_Transition
 from Klang import Wie_ein_Klang_aufgelöst
 
@@ -220,7 +221,6 @@ def Standart_Analyse(n1,n2,score_slices,Modus=None,Annotationston=None):
     o2=n2.abs_offset
     d1=n1.quarterLength
     d2=n2.quarterLength
-    
     if not Annotationston:
         Annotationston = n1 if d1>d2 else n2
     oA=Annotationston.abs_offset if Annotationston else None
@@ -234,6 +234,12 @@ def Standart_Analyse(n1,n2,score_slices,Modus=None,Annotationston=None):
         return n1 if Synpoke1 else n2
 
     if o1 != o2:
+        kurzer_note = n1 if o1 > o2 else n2
+        langer_note = n1 if o1 < o2 else n2
+        Konsonanz=konsonante_Sprung(kurzer_note,langer_note,Annotationston,score_slices)        
+        if Konsonanz:
+            print("Konsonanz",Konsonanz.offset,Konsonanz.name)
+            return n1 if n2.name == Konsonanz.name else n2
         return n1 if o1 > o2 else n2
 
     Dissonanz=Analyse_durchAnnotationston(n1, n2, Annotationston)
@@ -245,7 +251,9 @@ def Standart_Analyse(n1,n2,score_slices,Modus=None,Annotationston=None):
         return n1 if n1_ist_Transition else n2
     if d1 != d2:
         return n1 if d1 < d2 else n2
+  
     print("unbekannte Dissonanz",n1.Takt_Nr, n1.offset_Takt,n1,n2)
+
 
 
 def Analyse_durchAnnotationston(n1: note.Note,n2: note.Note,Annotationston: note.Note):
@@ -263,7 +271,7 @@ def Analyse_durchAnnotationston(n1: note.Note,n2: note.Note,Annotationston: note
         else:
             return n2
     elif not Intervall_1.isConsonant() and not Intervall_2.isConsonant():
-        return n1  
+        return n1 
     else:
         return None
 
@@ -282,6 +290,18 @@ def Dominant_unterTerz(Klang,note,score_slices):
         if not Schrittweise:
             return note
     return None
+
+def konsonante_Sprung(kurzer_note,langer_note,Annotationston,score_slices):
+
+    Intervall1 = interval.Interval(kurzer_note, Annotationston)
+    Intervall2 = interval.Interval(langer_note, Annotationston)
+
+    if Intervall1.isConsonant() and not Intervall2.isConsonant():
+        Schrittweise=None
+        Schrittweise = ist_Transition(kurzer_note, score_slices, modus="Original_Slices")
+        if not Schrittweise:
+            return kurzer_note
+    return False
 
 
 def ist_zusätzliche_Ton_konsonant(Note,Klang,Töne,Urklang=None):
@@ -302,3 +322,8 @@ def konsonante_Quarte(Kategorie,Quarte,Bass):
         if Quarte.name == Bass.name and Quarte.nameWithOctave != Bass.nameWithOctave:
             return True
     return False
+
+
+def Grundton(n):
+    
+    return n.pitch == n.chord().root()

@@ -1,4 +1,5 @@
 from music21 import stream,note, chord, interval
+import music21_chord_extensions  # Register the project's Chord.isIncompleteSeventh method.
 from Notenbearbeitung import Noten_am_Offset, ist_Transition,notes_in_time_span
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence
@@ -57,10 +58,15 @@ class HarmonischerKontext:
             return self.aktiver_Slice, True
 
         self.aktiver_Slice = None
-        if len(Töne_am_Anfang) <= 2:
+        if len(Töne_am_Anfang) < 2:
             return None, False
 
         gerüstbass = min(Töne_am_Anfang, key=lambda n: n.pitch.midi)
+        if len(Töne_am_Anfang) == 2:
+            L1= Töne_am_Anfang[0].duration.quarterLength
+            L2= Töne_am_Anfang[1].duration.quarterLength
+            if L1 != L2:
+                gerüstbass = Töne_am_Anfang[0] if L1 > L2 else Töne_am_Anfang[1]
         ende = float(gerüstbass.abs_offset) + float(gerüstbass.quarterLength)
         if ende <= zeit:
             return None, False
@@ -1061,6 +1067,8 @@ def Wie_ein_Klang_aufgelöst(Klang,Noten_im_Bereich,Note1=None,Note2=None,Note3=
         for n in Noten_im_Bereich:
             if n.nameWithOctave==Septime.nameWithOctave:
                 seventh_candidates.append(n)
+        if not seventh_candidates:
+            return "37"
         seventh_note = sorted(seventh_candidates, key=lambda n: (n.offset, n.pitch.midi))[0]
         seventh_end = seventh_note.offset + seventh_note.quarterLength
         sixth_candidates = []
