@@ -46,20 +46,13 @@ class HarmonischerKontext:
     def zurücksetzen(self):
         self.aktiver_Slice = None
 
-    def aktualisieren(self, offset, Töne_am_Anfang: Sequence[note.Note],Original_Slices):
+    def aktualisieren(self, Töne_am_Anfang: Sequence[note.Note],Original_Slices):
         """Gibt ``(Slice, geerbt)`` zurück, ohne Dissonanzen zu analysieren.
 
         Ein noch aktiver Slice hat Vorrang vor einem neu gescannten Klang. Erst
         außerhalb seines Zeitbereichs kann bei mehr als zwei Tönen der tiefste
         Ton einen neuen Harmonieabschnitt eröffnen.
         """
-        zeit = float(offset)
-        if self.aktiver_Slice is not None and self.aktiver_Slice.enthält(zeit):
-            return self.aktiver_Slice, True
-
-        self.aktiver_Slice = None
-        if len(Töne_am_Anfang) < 2:
-            return None, False
 
         gerüstbass = min(Töne_am_Anfang, key=lambda n: n.pitch.midi)
         if len(Töne_am_Anfang) == 2:
@@ -67,15 +60,27 @@ class HarmonischerKontext:
             L2= Töne_am_Anfang[1].duration.quarterLength
             if L1 != L2:
                 gerüstbass = Töne_am_Anfang[0] if L1 > L2 else Töne_am_Anfang[1]
+                #print('Gerüstbass:', gerüstbass.abs_offset, gerüstbass)
+        zeit = float(gerüstbass.abs_offset)
         ende = float(gerüstbass.abs_offset) + float(gerüstbass.quarterLength)
-        if ende <= zeit:
+        
+        if self.aktiver_Slice is not None and self.aktiver_Slice.enthält(zeit):
+            return self.aktiver_Slice, True
+
+        self.aktiver_Slice = None
+        if len(Töne_am_Anfang) < 2:
             return None, False
 
+        if ende <= zeit:
+            return None, False
+        Tönenamen= {ton.name for ton in Töne_am_Anfang}
         Töne_im_Bereich = notes_in_time_span(Original_Slices, zeit, ende)
         Beurteilung = Beurteilung_dissonanten_Klangs(chord.Chord(Töne_am_Anfang),None,None,None,Töne_im_Bereich)
         Dissonantklang = Beurteilung.get("dissonant_notes")
         Dissonantklangnamen =[n.name for n in Dissonantklang]
-        Tönenamen= {ton.name for ton in Töne_am_Anfang}
+        if Dissonantklang:
+            Töne= Beurteilung.get("akkordtöne")
+            Tönenamen = [n.name for n in Töne]
         self.aktiver_Slice = HarmonischerRhythmusSlice(
             Anfang=zeit,
             Ende=ende,
@@ -261,7 +266,7 @@ def Beurteilung_dissonanten_Klangs(
     Objekt, Zahl=None, Kennzeichen=None, Modusanfang=None, Töne_im_Bereich=None,
     Hilfstimme_Kontext=None
 ):
-    
+    from Dissonanzanalyse import Grundton_Vierklang
     if not isinstance(Objekt, chord.Chord):
         raise TypeError
     
@@ -280,17 +285,24 @@ def Beurteilung_dissonanten_Klangs(
         'None':None,
         'Umkehrung':None,
         'Grundton':None,
-        'Basston': None,
-        'zusätzliche_Konsonanz':None
+        'Basston': None
     }
+
+    Septakkordzieffer= {7,37,57,357,34,346,56,356,2,24,26,246,0}
+
+    if Objekt.isTriad() and Töne_im_Bereich:
+        for n in Töne_im_Bereich:
+            gefundenerGrundton=Grundton_Vierklang(n,Objekt,Töne_im_Bereich)
+            if gefundenerGrundton:
+                Objekt = chord.Chord(list(Objekt.notes) + [gefundenerGrundton])
+                break
 
     Umkehrung = Objekt.inversion()
     Alle_Akkordtöne=list(Objekt.notes)
     Akkord = Objekt.closedPosition()
     Akkordtöne = list(Akkord.notes)
-    Namen_im_Klanggerüst = {n.name for n in Akkordtöne if isinstance(n, note.Note)}
-  
-    Septakkordzieffer= {7,37,57,357,34,346,56,356,2,24,26,246,0}
+
+    result['akkordtöne'] = Akkordtöne
 
     oberste_note = max(Alle_Akkordtöne, key=lambda n: n.pitch.midi)
     Basston = min(Alle_Akkordtöne, key=lambda n: n.pitch.midi)
@@ -300,7 +312,6 @@ def Beurteilung_dissonanten_Klangs(
 
     if Zahl is None:
         Zahl = Generalbassbezifferung(Akkordtöne, Basston)
-    
     Septakkord=ist_Ein_Septakkord(Objekt,Zahl,Töne_im_Bereich,Modusanfang)
 
     if Septakkord and Zahl not in Septakkordzieffer:
@@ -311,9 +322,7 @@ def Beurteilung_dissonanten_Klangs(
         Quinte = note.Note(Klanggerüst.fifth) if Klanggerüst.fifth else None
         Septime = note.Note(Klanggerüst.seventh) if Klanggerüst.seventh else None
 
-    result['akkordtöne'] = Namen_im_Klanggerüst 
-    result['Grundton'] = Grundton
-
+    
     def Annotationston_ist_Transition():
         if Hilfstimme_Kontext is None:
             return False
@@ -327,7 +336,7 @@ def Beurteilung_dissonanten_Klangs(
     else:
         if len(Akkordtöne) == 2:
             #print("Quarte",Modusanfang,Akkord.intervalFromChordStep(5))
-            if Akkord.intervalFromChordStep(7) and Akkord.intervalFromChordStep(7).simpleName in['m7','M2']:
+            if Akkord.intervalFromChordStep(7) and Akkord.intervalFromChordStep(7).simpleName in['m7','M2'] and Kennzeichen:
                 result['dissonant_notes'] = [Septime]
             elif Akkord.intervalFromChordStep(5):
                 if Töne_im_Bereich:
@@ -351,9 +360,6 @@ def Beurteilung_dissonanten_Klangs(
                             result['dissonant_notes'] = [Grundton]
             elif Akkord.intervalFromChordStep(3) and Akkord.intervalFromChordStep(3).simpleName == 'A6': #übermäßige Sexte
                 result['dissonant_notes'] = [Basston,oberste_note]
-            else:
-                #print('Fehler bei 2-Tönige_Klanggerüst::was ist die Klangdissonanz???','Modusanfang:',Modusanfang)
-                return result
         elif Akkord.isTriad():
                 if Akkord.isAugmentedTriad() or Akkord.isDiminishedTriad():
                     result['dissonant_notes'] = [Quinte]
@@ -383,6 +389,7 @@ def Beurteilung_dissonanten_Klangs(
         elif Zahl == 45:
             Quarte = finden_Note_über_Bass(Akkord, 4)
             result['dissonant_notes'] = [Quarte]
+
     return result
 
 def Beurteilung_dissonanten_Klangs2(Objekt,Vollständigung=None,Anfang=None,Grenzen=None,score_slices=None,
@@ -1476,6 +1483,8 @@ def Wie_ein_Klang_aufgelöst(Klang,Noten_im_Bereich,Note1=None,Note2=None,Note3=
             offset_letzter_Auflösungston2 = max(n.offset for n in Auflösungston2_candidates)
             if offset_letzter_Auflösungston > offset_letzter_Grundton or offset_letzter_Auflösungston2 > offset_letzter_Grundton:
                 return "zufällige Dissonanz"
+            else:
+                return "Grundton"
         else: 
             return "Grundton" 
 

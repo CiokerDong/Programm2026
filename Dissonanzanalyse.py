@@ -1,8 +1,8 @@
 
-from music21 import chord, interval, converter, note
+from music21 import chord, interval, converter, note, stream
 import music21_chord_extensions  # Register the project's Chord.isIncompleteSeventh method.
 from Notenbearbeitung import Noten_am_Offset,notes_in_time_span,ist_Transition
-from Klang import Wie_ein_Klang_aufgelöst
+from Klang import Wie_ein_Klang_aufgelöst,Beurteilung_dissonanten_Klangs
 
 
 def Dissonanz_Finden(chordified_stream): 
@@ -22,7 +22,6 @@ def Dissonanz_Finden(chordified_stream):
             for i, note_obj in enumerate(notes):
                 for other_note in notes[i + 1:]: 
                     intvl = interval.notesToInterval(note_obj, other_note)
-
                     # Beurteilung, ob eine reine Quarte dissonant ist.
                     if intvl.simpleName == 'P4' and (
                         note_obj.nameWithOctave == bass_note.nameWithOctave or 
@@ -215,7 +214,7 @@ def isSynpoke(n,offset,Modusanfang):
         return True
     return False
 
-def Standart_Analyse(n1,n2,score_slices,Modus=None,Annotationston=None):
+def Standart_Analyse(n1,n2,score_slices,Modus=None,Annotationston=None,Akkorddissonanz=None):
 
     o1=n1.abs_offset
     o2=n2.abs_offset
@@ -227,7 +226,7 @@ def Standart_Analyse(n1,n2,score_slices,Modus=None,Annotationston=None):
 
     Synpoke1=isSynpoke(n1,o1,oA)
     Synpoke2=isSynpoke(n2,o2,oA)
-
+    
     #Sonderfall
     if (Synpoke1 and o2==oA) or (Synpoke2 and o1==oA):
         #print(n1.Takt_Nr,n1.offset_Takt,n2.offset_Takt,n1.name,n2.name,Synpoke1,Synpoke2)
@@ -236,9 +235,8 @@ def Standart_Analyse(n1,n2,score_slices,Modus=None,Annotationston=None):
     if o1 != o2:
         kurzer_note = n1 if o1 > o2 else n2
         langer_note = n1 if o1 < o2 else n2
-        Konsonanz=konsonante_Sprung(kurzer_note,langer_note,Annotationston,score_slices)        
+        Konsonanz=konsonante_Sprung(kurzer_note,langer_note,Annotationston,score_slices,Akkorddissonanz)        
         if Konsonanz:
-            print("Konsonanz",Konsonanz.offset,Konsonanz.name)
             return n1 if n2.name == Konsonanz.name else n2
         return n1 if o1 > o2 else n2
 
@@ -277,7 +275,6 @@ def Analyse_durchAnnotationston(n1: note.Note,n2: note.Note,Annotationston: note
 
  
 def Dominant_unterTerz(Klang,note,score_slices):
-
     if Klang.commonName in ["dominant seventh chord", "incomplete dominant-seventh chord"]:
         return None
     
@@ -291,12 +288,14 @@ def Dominant_unterTerz(Klang,note,score_slices):
             return note
     return None
 
-def konsonante_Sprung(kurzer_note,langer_note,Annotationston,score_slices):
+def konsonante_Sprung(kurzer_note,langer_note,Annotationston,score_slices,Akkorddissonanz=None):
 
     Intervall1 = interval.Interval(kurzer_note, Annotationston)
     Intervall2 = interval.Interval(langer_note, Annotationston)
 
     if Intervall1.isConsonant() and not Intervall2.isConsonant():
+        if Akkorddissonanz and Annotationston.name in Akkorddissonanz:
+            return False
         Schrittweise=None
         Schrittweise = ist_Transition(kurzer_note, score_slices, modus="Original_Slices")
         if not Schrittweise:
@@ -304,17 +303,15 @@ def konsonante_Sprung(kurzer_note,langer_note,Annotationston,score_slices):
     return False
 
 
-def ist_zusätzliche_Ton_konsonant(Note,Klang,Töne,Urklang=None):
-
-    if Klang.isSeventh() or Klang.isIncompleteSeventh() or Klang.isTriad():
-        if Note.pitch == Klang.third:
+def ist_zusätzliche_Ton_konsonant(Note,Klang):
+    Klang1 = chord.Chord([Note, *Klang.notes])
+    if Klang1.isConsonant():
+        return True
+    if Klang1.isSeventh() or Klang1.isIncompleteSeventh() or Klang1.isTriad():
+        if Note.pitch == Klang1.third:
             return True
-        if Klang.fifth and Note.pitch == Klang.fifth and Klang.intervalFromChordStep(5).simpleName=="P5":
+        if Klang1.fifth and Note.pitch == Klang1.fifth and Klang1.intervalFromChordStep(5).simpleName=="P5":
             return True
-        if Note.pitch== Klang.root():
-            Auflösung=Wie_ein_Klang_aufgelöst("allgemeiner Klang",Töne,None,None,Note)
-            if Auflösung=="Grundton":
-                return True
     return False
 
 def konsonante_Quarte(Kategorie,Quarte,Bass):
@@ -324,6 +321,17 @@ def konsonante_Quarte(Kategorie,Quarte,Bass):
     return False
 
 
-def Grundton(n):
-    
-    return n.pitch == n.chord().root()
+def Grundton_Vierklang(n,Klang,Töne_im_Bereich):
+    Klang1 = chord.Chord([n, *Klang.notes])
+    if not ((Klang1.isSeventh() or Klang1.isIncompleteSeventh()) and n.pitch== Klang1.root()):
+        return None
+    Töne=[]
+    parent = n.getContextByClass(stream.Part)
+    for n1 in Töne_im_Bereich:
+        Stimme=n1.getContextByClass(stream.Part)
+        if Stimme == parent:
+            Töne.append(n1)
+    Auflösung=Wie_ein_Klang_aufgelöst("allgemeiner Klang",Töne_im_Bereich,None,None,n)
+    if Auflösung=="Grundton":
+        return n
+    return None

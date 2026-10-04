@@ -68,31 +68,37 @@ def Modi_auf_der_Hiflsstimme(score: stream.Score,Grenzen,Original_Slices,hilfsst
             Töne_am_Modusanfang = list(Noten_am_Offset(Original_Slices, Anfang) or [])
             Namen_im_Klanggerüst = {n.name for n in Klanggerüst.notes}
             Beurteilung = Beurteilung_dissonanten_Klangs(
-                Klanggerüst, Zahlen, Kennzeichen, Anfang,
+                Klanggerüst, Zahlen, Kennzeichen, Anfang,Töne_im_Bereich,
                 Hilfstimme_Kontext=(Annotationston, Elemente, i0)
             )
             Akkorddissonanz = Beurteilung.get('dissonant_notes')
             Akkordeigene_Töne = Beurteilung.get('akkordtöne')
+            Akkordtönenamen = {n.name for n in Akkordeigene_Töne if isinstance(n, note.Note)}
             Kategorie=Beurteilung.get('category')
             #print(El.offset,Klanggerüst)
+            Klanggerüst0=Klanggerüst
+            Klanggerüst=chord.Chord(list(Akkordeigene_Töne))
             Töne_am_Modusanfang = [n for n in Töne_am_Modusanfang if n.name not in Namen_im_Klanggerüst]
             Klanggerüst_alle = chord.Chord(list(Klanggerüst.notes) + Töne_am_Modusanfang)
             Geruesttoene_nur_einstimmig=None
-            if len(Klanggerüst.notes) == 2:
-                Namen_im_Klanggerüst = {n.nameWithOctave for n in Klanggerüst.notes}
-                alle_Gerüsttöne = [
-                    n for n in Töne_im_Bereich
-                    if n.nameWithOctave in Namen_im_Klanggerüst
-                ]
-                alle_Gerüsttönename = [n.nameWithOctave for n in alle_Gerüsttöne]
 
-                # Nur beurteilen, wenn kein Geruestton in gleicher Oktavlage
-                # mehrfach in der Begleitungsstimme vorkommt.
-                if len(alle_Gerüsttönename) == len(set(alle_Gerüsttönename)):
-                    
+            # Prüfen, ob die Begleitung kontrapunktisch ist.
+            Namen_im_Klanggerüst = {n.nameWithOctave for n in Klanggerüst0.notes}
+            alle_Gerüsttöne = [
+                n for n in Töne_im_Bereich
+                if n.nameWithOctave in Namen_im_Klanggerüst
+            ]
+            alle_Gerüsttönename = [n.nameWithOctave for n in alle_Gerüsttöne]
+            if len(alle_Gerüsttönename) == len(set(alle_Gerüsttönename)):
+                # verdoppelte Oktave finden, um zu prüfen, ob die Gerüsttöne vertikal überlappen
+                verdoppelte_Oktave = []
+                for n in Töne_im_Bereich:
+                    intervall = interval.Interval(Annotationston, n)
+                    if intervall.generic.directed == 8 and intervall.name=="P8":
+                        verdoppelte_Oktave.append(n)
+                if len(verdoppelte_Oktave) < 2:
                     Geruesttoene_vertikal_ueberlappt = haben_vertikale_Überlappung(alle_Gerüsttöne)
                     Geruesttoene_nur_einstimmig = not Geruesttoene_vertikal_ueberlappt
-                    print(Anfang,alle_Gerüsttöne,Geruesttoene_vertikal_ueberlappt)
             if not Geruesttoene_nur_einstimmig:
                 if Klanggerüst is None:
                     print("框架是None!!!:", Anfang)
@@ -108,7 +114,7 @@ def Modi_auf_der_Hiflsstimme(score: stream.Score,Grenzen,Original_Slices,hilfsst
                     'Annotationston': Annotationston,
                     'Hilfstimme_Kontext': (Annotationston, Elemente, i0),
                     'Bass': Basston,
-                    'Akkordeigene_Töne':Akkordeigene_Töne,
+                    'Akkordeigene_Töne':Akkordtönenamen,
                     'Akkorddissonanz': Akkorddissonanz
                 })
             else:   
@@ -123,7 +129,7 @@ def Modi_auf_der_Hiflsstimme(score: stream.Score,Grenzen,Original_Slices,hilfsst
                     'Annotationston': Annotationston,
                     'Hilfstimme_Kontext': (Annotationston, Elemente, i0),
                     'Bass': Basston,
-                    'Akkordeigene_Töne':Akkordeigene_Töne,
+                    'Akkordeigene_Töne':Akkordtönenamen,
                     'Akkorddissonanz': Akkorddissonanz
                 })
         
