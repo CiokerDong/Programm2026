@@ -1,101 +1,14 @@
 from music21 import stream,note, chord, interval
 import music21_chord_extensions  # Register the project's Chord.isIncompleteSeventh method.
 from Notenbearbeitung import Noten_am_Offset, ist_Transition,notes_in_time_span
-from dataclasses import dataclass
-from typing import Any, Optional, Sequence
 import bisect
 import math
 import copy
-
-
-@dataclass
-class HarmonischerRhythmusSlice:
-    """Zustand eines vom Gerüstbass getragenen Harmonieabschnitts.
-
-    Die drei Dissonanzfelder bleiben zunächst ``None``. Sie sind bewusst als
-    Platzhalter angelegt, damit die spätere Analyse zentral über die bereits in
-    diesem Modul vorhandenen Beurteilungsfunktionen erfolgen kann.
-    """
-
-    Anfang: float
-    Ende: float
-    Gerüstbass: note.Note
-    Tönenamen: tuple
-    Klang:chord.Chord
-    Klang_ist_dissonant: Optional[bool] = None
-    Gerüstbass_ist_dissonant: Optional[bool] = None
-    Klangdissonanzname: Optional[bool] = None
-
-
-    def enthält(self, offset, tol=1e-6):
-        """Halboffene Zugehörigkeit: Anfang <= offset < Ende."""
-        zeit = float(offset)
-        return (
-            zeit >= self.Anfang - tol
-            and zeit < self.Ende
-            and not math.isclose(zeit, self.Ende, abs_tol=tol)
-        )
-
-
-class HarmonischerKontext:
-    """Verwaltet den aktiven Harmonieabschnitt während des Offset-Scans."""
-
-    def __init__(self):
-        self.aktiver_Slice = None
-
-    def zurücksetzen(self):
-        self.aktiver_Slice = None
-
-    def aktualisieren(self, Töne_am_Anfang: Sequence[note.Note],Original_Slices):
-        """Gibt ``(Slice, geerbt)`` zurück, ohne Dissonanzen zu analysieren.
-
-        Ein noch aktiver Slice hat Vorrang vor einem neu gescannten Klang. Erst
-        außerhalb seines Zeitbereichs kann bei mehr als zwei Tönen der tiefste
-        Ton einen neuen Harmonieabschnitt eröffnen.
-        """
-
-        gerüstbass = min(Töne_am_Anfang, key=lambda n: n.pitch.midi)
-        if len(Töne_am_Anfang) == 2:
-            L1= Töne_am_Anfang[0].duration.quarterLength
-            L2= Töne_am_Anfang[1].duration.quarterLength
-            if L1 != L2:
-                gerüstbass = Töne_am_Anfang[0] if L1 > L2 else Töne_am_Anfang[1]
-                #print('Gerüstbass:', gerüstbass.abs_offset, gerüstbass)
-        zeit = float(gerüstbass.abs_offset)
-        ende = float(gerüstbass.abs_offset) + float(gerüstbass.quarterLength)
-        
-        if self.aktiver_Slice is not None and self.aktiver_Slice.enthält(zeit):
-            return self.aktiver_Slice, True
-
-        self.aktiver_Slice = None
-        if len(Töne_am_Anfang) < 2:
-            return None, False
-
-        if ende <= zeit:
-            return None, False
-        Tönenamen= {ton.name for ton in Töne_am_Anfang}
-        Töne_im_Bereich = notes_in_time_span(Original_Slices, zeit, ende)
-        Beurteilung = Beurteilung_dissonanten_Klangs(chord.Chord(Töne_am_Anfang),None,None,None,Töne_im_Bereich)
-        Dissonantklang = Beurteilung.get("dissonant_notes")
-        Dissonantklangnamen =[n.name for n in Dissonantklang]
-        if Dissonantklang:
-            Töne= Beurteilung.get("akkordtöne")
-            Tönenamen = [n.name for n in Töne]
-        self.aktiver_Slice = HarmonischerRhythmusSlice(
-            Anfang=zeit,
-            Ende=ende,
-            Klang=chord.Chord(Töne_am_Anfang),
-            Gerüstbass=gerüstbass,
-            Klangdissonanzname=Dissonantklangnamen,
-            Tönenamen=Tönenamen
-        )
-        return self.aktiver_Slice, False
 
 def index_von_offset(Grenzen, offset, tol=1e-6):
     i = bisect.bisect_left(Grenzen, float(offset))
     if i < len(Grenzen) and math.isclose(Grenzen[i], float(offset), abs_tol=tol):
         return i
-    # 有时 offset 会落在两点之间但“应该属于左边”
     if i > 0 and math.isclose(Grenzen[i-1], float(offset), abs_tol=tol):
         return i - 1
     raise ValueError(f"offset {offset} 不在 Grenzen 中（tol={tol}）")
@@ -107,7 +20,6 @@ def Intervalls_von_Basston_im_Akkord(ch):
 
 def Generalbassbezifferung(Akkordtöne, Basston):
     """Gibt die Ziffernkombination der Akkordtöne über dem Bass zurück.
-
     Oktavverdopplungen bleiben als 8 erhalten. Zusammengesetzte Intervalle
     über der None werden um Oktaven reduziert. Beispiele: C-F-A -> 46,
     C-E-G -> 35.
@@ -142,21 +54,15 @@ def finden_Note_über_Bass(ch, Nummer):
     
     return min(Noten, key=lambda n: n.pitch.midi)
 
-def Verständigung_des_Septakkordes(Anfang,Grenzen,score_slices,Akkordobjekt,i=None):
-    
-    Vollständige_Septakkordnamen=[
-        'major seventh chord', 'dominant seventh chord','minor seventh chord',
-        'minor-augmented tetrachord','augmented major tetrachord','diminished seventh chord','half-diminished seventh chord']
+def Verständigung_des_Septakkordes(Anfang,Grenzen,score_slices,Akkordobjekt,i=None): 
     
     Akkord = Akkordobjekt.closedPosition()
     Akkordtöne = list(Akkord.notes)
-
     Grundton = note.Note(Akkordobjekt.root()) if Akkordobjekt.root() else None
     Terz = note.Note(Akkordobjekt.third) if Akkordobjekt.third else None
     Quinte = note.Note(Akkordobjekt.fifth) if Akkordobjekt.fifth else None
     Septime = note.Note(Akkordobjekt.seventh) if Akkordobjekt.seventh else None
     Basston = note.Note(Akkordobjekt.bass()) if Akkordobjekt.bass() else None
-    
     Noten_davor=[]
 
     if len(Akkordtöne) == 3 and Septime and Grundton and (Terz or Quinte):
@@ -194,8 +100,7 @@ def Verständigung_des_Septakkordes(Anfang,Grenzen,score_slices,Akkordobjekt,i=N
     else:
         return Akkordobjekt
 
-
-def ist_Ein_Septakkord(Klang,Zahl=None,Töne_im_Bereich=None,Offset=None):
+def ist_Ein_Septakkord(Klang,Zahl=None,Töne_im_Bereich=None,Offset=None,bearbeitet=None):
     Bass = note.Note(Klang.bass()) if Klang.bass() else None
     Terz = note.Note(Klang.third) if Klang.third else None
     Quinte = note.Note(Klang.fifth) if Klang.fifth else None
@@ -204,7 +109,7 @@ def ist_Ein_Septakkord(Klang,Zahl=None,Töne_im_Bereich=None,Offset=None):
     Einfachklang= Klang.closedPosition()
     Umkehrung= Klang.inversion()
     Zufällige_Dissonanz=None
-    if Klang.isSeventh():
+    if Klang.isSeventh() or (Klang.isIncompleteSeventh() and bearbeitet):
         if Umkehrung == 0:
             return 37
         elif Umkehrung == 1:
@@ -222,7 +127,7 @@ def ist_Ein_Septakkord(Klang,Zahl=None,Töne_im_Bereich=None,Offset=None):
                 if Auflösung == 'Grundton':
                   return 24
             return 24
-    elif Klang.isIncompleteSeventh():
+    elif Klang.isIncompleteSeventh() and not bearbeitet:
             if Grundton.name == Bass.name:
                 if Terz and Töne_im_Bereich:
                     Auflösung = Wie_ein_Klang_aufgelöst('37',Töne_im_Bereich,None,None,Septime)
@@ -259,12 +164,11 @@ def ist_Ein_Septakkord(Klang,Zahl=None,Töne_im_Bereich=None,Offset=None):
             Auflösung = Wie_ein_Klang_aufgelöst(Intervallzahle,Töne_im_Bereich,Note1,Note2,Note3,Offset)
             if Auflösung in ['24','26','57','37']:
                 return int(Auflösung)
-
     return False
     
 def Beurteilung_dissonanten_Klangs(
     Objekt, Zahl=None, Kennzeichen=None, Modusanfang=None, Töne_im_Bereich=None,
-    Hilfstimme_Kontext=None
+    Hilfstimme_Kontext=None, Original_Slices=None
 ):
     from Dissonanzanalyse import Grundton_Vierklang
     if not isinstance(Objekt, chord.Chord):
@@ -289,12 +193,15 @@ def Beurteilung_dissonanten_Klangs(
     }
 
     Septakkordzieffer= {7,37,57,357,34,346,56,356,2,24,26,246,0}
+    Akkord = Objekt.closedPosition()
 
-    if Objekt.isTriad() and Töne_im_Bereich:
+    bearbeitete_Akkord = False
+    if (Objekt.isTriad() or len(Akkord.notes) == 2) and Töne_im_Bereich:
         for n in Töne_im_Bereich:
-            gefundenerGrundton=Grundton_Vierklang(n,Objekt,Töne_im_Bereich)
+            gefundenerGrundton=Grundton_Vierklang(n,Objekt,Töne_im_Bereich,Original_Slices)
             if gefundenerGrundton:
                 Objekt = chord.Chord(list(Objekt.notes) + [gefundenerGrundton])
+                bearbeitete_Akkord = True
                 break
 
     Umkehrung = Objekt.inversion()
@@ -312,7 +219,8 @@ def Beurteilung_dissonanten_Klangs(
 
     if Zahl is None:
         Zahl = Generalbassbezifferung(Akkordtöne, Basston)
-    Septakkord=ist_Ein_Septakkord(Objekt,Zahl,Töne_im_Bereich,Modusanfang)
+
+    Septakkord=ist_Ein_Septakkord(Objekt,Zahl,Töne_im_Bereich,Modusanfang,bearbeitete_Akkord)
 
     if Septakkord and Zahl not in Septakkordzieffer:
         Klanggerüst = Bildung_Klanggerüst(Töne_im_Bereich, Septakkord, Basston)
@@ -322,7 +230,7 @@ def Beurteilung_dissonanten_Klangs(
         Quinte = note.Note(Klanggerüst.fifth) if Klanggerüst.fifth else None
         Septime = note.Note(Klanggerüst.seventh) if Klanggerüst.seventh else None
 
-    
+
     def Annotationston_ist_Transition():
         if Hilfstimme_Kontext is None:
             return False
@@ -335,7 +243,6 @@ def Beurteilung_dissonanten_Klangs(
             result['dissonant_notes'] = [Septime,Basston]
     else:
         if len(Akkordtöne) == 2:
-            #print("Quarte",Modusanfang,Akkord.intervalFromChordStep(5))
             if Akkord.intervalFromChordStep(7) and Akkord.intervalFromChordStep(7).simpleName in['m7','M2'] and Kennzeichen:
                 result['dissonant_notes'] = [Septime]
             elif Akkord.intervalFromChordStep(5):
@@ -382,7 +289,7 @@ def Beurteilung_dissonanten_Klangs(
                 if Umkehrung in [0,1,3]:
                     result['dissonant_notes'] = [Septime]
                 elif Umkehrung == 2:
-                    result['dissonant_notes'] = [Septime,Quinte]
+                    result['dissonant_notes'] = [Septime,Basston]
                     result['category']='34'
                 else:
                     print('Bug-Meldung:Unbekante Vierklangsumkehrung:',Modusanfang,Objekt)

@@ -223,7 +223,9 @@ def Standart_Analyse(n1,n2,score_slices,Modus=None,Annotationston=None,Akkorddis
     if not Annotationston:
         Annotationston = n1 if d1>d2 else n2
     oA=Annotationston.abs_offset if Annotationston else None
-
+    Dissonanz_über_Annotationston=Analyse_durchAnnotationston(n1, n2, Annotationston)
+    
+        
     Synpoke1=isSynpoke(n1,o1,oA)
     Synpoke2=isSynpoke(n2,o2,oA)
     
@@ -240,9 +242,10 @@ def Standart_Analyse(n1,n2,score_slices,Modus=None,Annotationston=None,Akkorddis
             return n1 if n2.name == Konsonanz.name else n2
         return n1 if o1 > o2 else n2
 
-    Dissonanz=Analyse_durchAnnotationston(n1, n2, Annotationston)
-    if Dissonanz:
-        return Dissonanz
+
+    if Dissonanz_über_Annotationston:
+        return Dissonanz_über_Annotationston
+
     n1_ist_Transition = ist_Transition(n1, score_slices, modus="Original_Slices")
     n2_ist_Transition = ist_Transition(n2, score_slices, modus="Original_Slices")
     if n1_ist_Transition != n2_ist_Transition:
@@ -251,7 +254,6 @@ def Standart_Analyse(n1,n2,score_slices,Modus=None,Annotationston=None,Akkorddis
         return n1 if d1 < d2 else n2
   
     print("unbekannte Dissonanz",n1.Takt_Nr, n1.offset_Takt,n1,n2)
-
 
 
 def Analyse_durchAnnotationston(n1: note.Note,n2: note.Note,Annotationston: note.Note):
@@ -273,7 +275,6 @@ def Analyse_durchAnnotationston(n1: note.Note,n2: note.Note,Annotationston: note
     else:
         return None
 
- 
 def Dominant_unterTerz(Klang,note,score_slices):
     if Klang.commonName in ["dominant seventh chord", "incomplete dominant-seventh chord"]:
         return None
@@ -302,7 +303,6 @@ def konsonante_Sprung(kurzer_note,langer_note,Annotationston,score_slices,Akkord
             return kurzer_note
     return False
 
-
 def ist_zusätzliche_Ton_konsonant(Note,Klang):
     Klang1 = chord.Chord([Note, *Klang.notes])
     if Klang1.isConsonant():
@@ -321,7 +321,7 @@ def konsonante_Quarte(Kategorie,Quarte,Bass):
     return False
 
 
-def Grundton_Vierklang(n,Klang,Töne_im_Bereich):
+def Grundton_Vierklang(n,Klang,Töne_im_Bereich,Original_Slices):
     Klang1 = chord.Chord([n, *Klang.notes])
     if not ((Klang1.isSeventh() or Klang1.isIncompleteSeventh()) and n.pitch== Klang1.root()):
         return None
@@ -331,7 +331,9 @@ def Grundton_Vierklang(n,Klang,Töne_im_Bereich):
         Stimme=n1.getContextByClass(stream.Part)
         if Stimme == parent:
             Töne.append(n1)
-    Auflösung=Wie_ein_Klang_aufgelöst("allgemeiner Klang",Töne_im_Bereich,None,None,n)
-    if Auflösung=="Grundton":
+    Auflösung=Wie_ein_Klang_aufgelöst("allgemeiner Klang",Töne,None,None,n)
+    Transitution=ist_Transition(n, Original_Slices, modus="Original_Slices")
+
+    if Auflösung == "Grundton" and not Transitution:
         return n
     return None

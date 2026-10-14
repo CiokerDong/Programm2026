@@ -184,12 +184,58 @@ def Sammlung_aller_Slice(s: stream.Stream, grenzen: list[float],Auftakt) -> list
         out.append({'offset': a, 'elements': elems, 'bass': bass})
     return out
 
-
 def Noten_am_Offset(Slice_Sammlung: list[dict], offset: float) -> list|None:
     for d in Slice_Sammlung:
         if abs(d['offset'] - offset) <= INTEGRATION_TOL:
             return list(d['elements'])
     return None
+
+
+def _Slices_der_Stimme(Ton: note.Note, Original_Slices: list[dict]) -> list[dict]:
+    """Filtert alle Slice-Elemente auf die Stimme von ``Ton``.
+
+    Die Slices und ihre Offsets bleiben erhalten, auch wenn ein gefilterter
+    Slice keine Elemente mehr enthält.
+    """
+    if Ton is None or not Original_Slices:
+        return []
+
+    Zielstimme = Ton.getContextByClass(stream.Part)
+    if Zielstimme is None:
+        return []
+
+    def normalisierte_Stimmen_ID(Stimme):
+        Stimmen_ID = getattr(Stimme, "id", None)
+        if Stimmen_ID is None:
+            return None
+        Stimmen_ID = str(Stimmen_ID)
+        return Stimmen_ID[:-5] if Stimmen_ID.endswith("_flat") else Stimmen_ID
+
+    Zielstimmen_ID = normalisierte_Stimmen_ID(Zielstimme)
+
+    def ist_in_Zielstimme(Element):
+        Stimme = Element.getContextByClass(stream.Part)
+        if Stimme is Zielstimme:
+            return True
+        return (
+            Zielstimmen_ID is not None
+            and normalisierte_Stimmen_ID(Stimme) == Zielstimmen_ID
+        )
+
+    Stimmen_Slices = []
+    for Slice in Original_Slices:
+        Elemente = [
+            Element for Element in Slice.get("elements", [])
+            if isinstance(Element, note.Note) and ist_in_Zielstimme(Element)
+        ]
+        Stimmen_Slice = dict(Slice)
+        Stimmen_Slice["elements"] = Elemente
+        Stimmen_Slice["bass"] = (
+            min(Elemente, key=lambda Element: Element.pitch.midi)
+            if Elemente else None
+        )
+        Stimmen_Slices.append(Stimmen_Slice)
+    return Stimmen_Slices
 
 
 def ist_Transition(Zielnote: note.Note, Quelle, modus="Hilfstimme",
@@ -219,27 +265,34 @@ def ist_Transition(Zielnote: note.Note, Quelle, modus="Hilfstimme",
 
         vorheriges_Element = Elemente[Zielindex - 1]
         naechstes_Element = Elemente[Zielindex + 1]
-        return (ist_Sekunde(vorheriges_Element, Zielnote)and ist_Sekunde(Zielnote, naechstes_Element))
+        return (
+            ist_Sekunde(vorheriges_Element, Zielnote)
+            and ist_Sekunde(Zielnote, naechstes_Element)
+        )
 
     if modus == "Original_Slices":
         Original_Slices = Quelle
+        Stimmen_Slices = _Slices_der_Stimme(Zielnote, Original_Slices)
+        if not Stimmen_Slices:
+            return False
+
         Zieloffset = float(getattr(Zielnote, "abs_offset", Zielnote.offset))
         Zielende = (float(Zielnote.abs_offset)+ float(Zielnote.quarterLength))
         Sliceindex = next(
             (
-                i for i, sl in enumerate(Original_Slices)
+                i for i, sl in enumerate(Stimmen_Slices)
                 if abs(float(sl["offset"]) - Zieloffset) <= TOL
             ),
             None
         )
-        if Sliceindex is None or Sliceindex == 0 or Sliceindex >= len(Original_Slices) - 1:
+        if Sliceindex is None or Sliceindex == 0 or Sliceindex >= len(Stimmen_Slices) - 1:
             return False
 
         vorherige_Noten = [
-            n for n in Original_Slices[Sliceindex - 1].get("elements", [])
+            n for n in Stimmen_Slices[Sliceindex - 1].get("elements", [])
             if isinstance(n, note.Note)
         ]
-        naechste_Noten = Noten_am_Offset(Original_Slices,Zielende)
+        naechste_Noten = Noten_am_Offset(Stimmen_Slices,Zielende) or []
         #print(Zielnote.Takt_Nr,Zielnote.offset_Takt, Zielnote.nameWithOctave,vorherige_Noten,naechste_Noten)
         return (
             any(ist_Sekunde(n, Zielnote) for n in vorherige_Noten)
