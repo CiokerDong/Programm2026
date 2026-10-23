@@ -214,46 +214,80 @@ def isSynpoke(n,offset,Modusanfang):
         return True
     return False
 
-def Standart_Analyse(n1,n2,score_slices,Modus=None,Annotationston=None,Akkorddissonanz=None):
+def Standart_Analyse(
+    n1,
+    n2,
+    score_slices,
+    Modus=None,
+    Annotationston=None,
+    Akkorddissonanz=None,
+    Segment=None,
+):
+
+    def Ergebnis_speichern(dissonanz):
+        Segment.registriere_dissonanz(dissonanz)
+        Segment.registriere_dissonanzintervall(n1, n2)
+        return dissonanz
 
     o1=n1.abs_offset
     o2=n2.abs_offset
     d1=n1.quarterLength
     d2=n2.quarterLength
+
     if not Annotationston:
         Annotationston = n1 if d1>d2 else n2
-    oA=Annotationston.abs_offset if Annotationston else None
     Dissonanz_über_Annotationston=Analyse_durchAnnotationston(n1, n2, Annotationston)
-    
-        
+    oA=Annotationston.abs_offset if Annotationston else None
+
     Synpoke1=isSynpoke(n1,o1,oA)
     Synpoke2=isSynpoke(n2,o2,oA)
     
     #Sonderfall
     if (Synpoke1 and o2==oA) or (Synpoke2 and o1==oA):
-        #print(n1.Takt_Nr,n1.offset_Takt,n2.offset_Takt,n1.name,n2.name,Synpoke1,Synpoke2)
-        return n1 if Synpoke1 else n2
-
+        Synpoke=n1 if Synpoke1 else n2
+        return Ergebnis_speichern(Synpoke)
+    
+    kurzer_note=None
+    langer_note=None
+    frühere_note=None
     if o1 != o2:
         kurzer_note = n1 if o1 > o2 else n2
         langer_note = n1 if o1 < o2 else n2
-        Konsonanz=konsonante_Sprung(kurzer_note,langer_note,Annotationston,score_slices,Akkorddissonanz)        
-        if Konsonanz:
-            return n1 if n2.name == Konsonanz.name else n2
-        return n1 if o1 > o2 else n2
-
-
+        frühere_note = langer_note 
+    elif d1 !=d2:
+        kurzer_note = n1 if d1 < d2 else n2
+        langer_note = n1 if d1 > d2 else n2
+    
     if Dissonanz_über_Annotationston:
-        return Dissonanz_über_Annotationston
+        if frühere_note:
+            if frühere_note not in Segment.Dissonante_Noten:
+                return Ergebnis_speichern(kurzer_note)
+            else:
+                frühere_intervalle = [
+                    intervall
+                    for intervall in Segment.Dissonante_Intervalle
+                    if any(gespeicherte_note is frühere_note for gespeicherte_note in intervall)
+                ]
+                bildet_akkord = any(
+                    (Klang := chord.Chord([*intervall, kurzer_note])).isTriad()
+                    or Klang.isIncompleteSeventh()
+                    for intervall in frühere_intervalle
+                )
+                if not bildet_akkord:
+                    return Ergebnis_speichern(kurzer_note)
 
+        return Ergebnis_speichern(Dissonanz_über_Annotationston)
+    
     n1_ist_Transition = ist_Transition(n1, score_slices, modus="Original_Slices")
     n2_ist_Transition = ist_Transition(n2, score_slices, modus="Original_Slices")
     if n1_ist_Transition != n2_ist_Transition:
-        return n1 if n1_ist_Transition else n2
-    if d1 != d2:
-        return n1 if d1 < d2 else n2
-  
+        Transitus=n1 if n1_ist_Transition else n2
+        return Ergebnis_speichern(Transitus)
+
+    if kurzer_note:
+        return Ergebnis_speichern(kurzer_note)
     print("unbekannte Dissonanz",n1.Takt_Nr, n1.offset_Takt,n1,n2)
+    
 
 
 def Analyse_durchAnnotationston(n1: note.Note,n2: note.Note,Annotationston: note.Note):
@@ -270,24 +304,9 @@ def Analyse_durchAnnotationston(n1: note.Note,n2: note.Note,Annotationston: note
             return n1             
         else:
             return n2
-    elif not Intervall_1.isConsonant() and not Intervall_2.isConsonant():
-        return n1 
-    else:
-        return None
 
-def Dominant_unterTerz(Klang,note,score_slices):
-    if Klang.commonName in ["dominant seventh chord", "incomplete dominant-seventh chord"]:
-        return None
-    
-    if Klang.intervalFromChordStep(5) and Klang.intervalFromChordStep(5).simpleName == 'd5':
-        Bass = min(Klang, key=lambda n: n.pitch.midi)
-        Intevall= interval.Interval(Bass, note)
-        Schrittweise=None
-        if note.pitch.midi < Bass.pitch.midi and Intevall.simpleName == "M3":
-           Schrittweise = ist_Transition(note, score_slices, modus="Original_Slices")
-        if not Schrittweise:
-            return note
     return None
+
 
 def konsonante_Sprung(kurzer_note,langer_note,Annotationston,score_slices,Akkorddissonanz=None):
 

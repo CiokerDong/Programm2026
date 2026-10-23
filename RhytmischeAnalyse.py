@@ -6,8 +6,8 @@ def Taktart_Analyse(score):
     Bestimmung der Taktart eines Musikstücks: 
     Dreier-Takt, Zweier-Takt oder gemischten Takt
     """
-    if not isinstance(score, (stream.Score, stream.Part)):
-        raise ValueError("Input must be a music21 stream.Score or stream.Part")
+    if not isinstance(score, stream.Stream):
+        raise ValueError("Input must be a music21 stream.Stream")
 
     time_signatures = score.flatten().getElementsByClass(meter.TimeSignature)
 
@@ -77,7 +77,17 @@ def Bestimme_betontePosition(score):
     Rückgabewert: dict: Die betonten Positionen jedes Takts im Format {Taktnummer: [Offsets]}."
     """
 
-    part1 = score.parts[1]  
+    parts = list(getattr(score, "parts", []))
+    if parts:
+        # Eine feste Verwendung von parts[1] scheitert bei einstimmigen
+        # Partituren. Die Stimme mit den meisten Takten ist die stabilste
+        # Referenz fuer die Taktstruktur.
+        part1 = max(
+            parts,
+            key=lambda part: len(list(part.getElementsByClass(stream.Measure)))
+        )
+    else:
+        part1 = score
     taktart = Taktart_Analyse(score)
     grundrhythmus = GrundrhythmusallerStimmen_dict(score)
 
@@ -214,3 +224,42 @@ def Bestimme_betontePosition(score):
         betontePositionen[measure_number] = [float(offset) for offset in strong_beats]
         zweite_betonte_Position[measure_number] = [float(offset) for offset in halfstrong_beats]
     return betontePositionen,zweite_betonte_Position
+
+
+def Bestimme_Taktzeit(
+    takt_nr,
+    offset_takt,
+    betonungspositionen,
+    tol=1e-6,
+):
+    """Ordnet einem Notenbeginn eine metrische Position zu.
+
+    ``offset_takt`` und die gespeicherten Positionen sind Viertellaengen.
+    Der Vergleich verwendet eine Toleranz, damit etwa 0.3 und
+    0.30000000000000004 nicht unterschiedlich klassifiziert werden.
+    """
+    if takt_nr is None or offset_takt is None:
+        return "unbetont"
+
+    try:
+        betonte_positionen, halb_betonte_positionen = betonungspositionen
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "betonungspositionen muss das von Bestimme_betontePosition "
+            "zurueckgegebene Paar sein."
+        ) from exc
+
+    offset_takt = float(offset_takt)
+    if any(
+        abs(offset_takt - float(position)) <= tol
+        for position in betonte_positionen.get(takt_nr, [])
+    ):
+        return "betont"
+
+    if any(
+        abs(offset_takt - float(position)) <= tol
+        for position in halb_betonte_positionen.get(takt_nr, [])
+    ):
+        return "halb-betont"
+
+    return "unbetont"

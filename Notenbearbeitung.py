@@ -1,5 +1,6 @@
 from music21 import stream, note, chord,interval
 from collections import defaultdict
+from RhytmischeAnalyse import Bestimme_Taktzeit
 INTEGRATION_TOL = 1e-6
 BOUNDARY_TOL = 1e-6
 
@@ -126,38 +127,76 @@ def _find_measure_for_abs_offset(taktindex: list[dict], abs_off: float) -> tuple
         return last['no'], max(0.0, float(abs_off - last['start']))
     return None, None
 
-# alle Noten in einer Partitur sammeln und ihnen zusätzliche Eigenschaften ergänzen
-def Sammlung_aller_Noten(s: stream.Score,Auftakt) -> list:
+
+
+
+# Wenn die globale Uebersicht uebergeben wird, stammt jede hier gesetzte
+# Taktzeit aus der Gesamtpartitur und niemals aus der einzelnen Stimme ``s``.
+def Sammlung_aller_Noten(
+    s: stream.Score,
+    Auftakt,
+    betonungspositionen=None,
+) -> list:
+    """Sammelt Noten und ergaenzt stabile Analyse-Eigenschaften.
+
+    ``Taktzeit`` wird ausschliesslich aus den Positionswoerterbuechern der
+    Gesamtpartitur bestimmt. Der Rhythmus von ``s`` wird hier nicht neu
+    analysiert.
+    """
     taktindex = _baue_taktindex(s,Auftakt)
-    Entfaltung = s.flatten()
-    Events = []
-    for el in Entfaltung.notesAndRests:
-        Globales_Offset = float(el.offset)
-        Takt_Nr, offset_Takt = _find_measure_for_abs_offset(taktindex, Globales_Offset)
+    events = []
+
+    def ergänze_Noteneigenschaften(
+        n, globales_offset, takt_nr, offset_takt, akkord_objekt
+    ):
+        n.abs_offset = globales_offset
+        n.end = globales_offset + float(n.quarterLength)
+        n.Chord_Objekt = akkord_objekt
+        n.Takt_Nr = takt_nr
+        n.offset_Takt = offset_takt
+        n.Taktzeit = Bestimme_Taktzeit(
+            takt_nr,
+            offset_takt,
+            betonungspositionen,
+            tol=INTEGRATION_TOL,
+        )
+
+    for el in s.flatten().notesAndRests:
+        globales_offset = float(el.offset)
+        takt_nr, offset_takt = _find_measure_for_abs_offset(
+            taktindex, globales_offset
+        )
         if isinstance(el, note.Note):
-            el.abs_offset = Globales_Offset
-            el.end = el.abs_offset + float(el.quarterLength)
-            el.Chord_Objekt = None
-            el.Takt_Nr = Takt_Nr
-            el.offset_Takt = offset_Takt
-            Events.append(el)
-
+            noten = (el,)
+            akkord_objekt = None
         elif isinstance(el, chord.Chord):
-            for n in el.notes:
-                n.abs_offset = Globales_Offset
-                n.end = n.abs_offset + float(n.quarterLength)
-                n.Chord_Objekt = el
-                n.Takt_Nr = Takt_Nr
-                n.offset_Takt = offset_Takt
-                Events.append(n)     
+            noten = el.notes
+            akkord_objekt = el
+        else:
+            continue
 
-    Events.sort(key=lambda e: e.abs_offset)
-    return Events
+        for n in noten:
+            ergänze_Noteneigenschaften(
+                n, globales_offset, takt_nr, offset_takt, akkord_objekt
+            )
+            events.append(n)
+
+    events.sort(key=lambda event: event.abs_offset)
+    return events
 
 # eine Liste,in der alle klingenden Noten in irgendeinem Offset-Slice gespeichert werden, für die Nutzung zur Verfügung stellen
-def Sammlung_aller_Slice(s: stream.Stream, grenzen: list[float],Auftakt) -> list[dict]:
+def Sammlung_aller_Slice(
+    s: stream.Stream,
+    grenzen: list[float],
+    Auftakt,
+    betonungspositionen=None,
+) -> list[dict]:
     grezen = list(sorted(map(float, grenzen)))
-    events = Sammlung_aller_Noten(s,Auftakt)
+    events = Sammlung_aller_Noten(
+        s,
+        Auftakt,
+        betonungspositionen,
+    )
     out = []
     Noten_im_Slice = []
     Notenummer = 0

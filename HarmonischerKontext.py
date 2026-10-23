@@ -7,7 +7,7 @@ denselben Datentyp :class:`Harmoniesegment` dargestellt.
 """
 
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import math
 import re
 from typing import Any, Optional, Sequence
@@ -53,6 +53,34 @@ class Harmoniesegment:
     Orgelpunkt: Any = None
     Hilfstimme_Kontext: Any = None
     hat_harmonischen_kontext: bool = False
+    Dissonante_Noten: list[note.Note] = field(default_factory=list, repr=False)
+    Dissonante_Intervalle: list[tuple[note.Note, note.Note]] = field(
+        default_factory=list,
+        repr=False,
+    )
+
+    def registriere_dissonanz(self, dissonanz: Optional[note.Note]) -> None:
+        """Speichert eine erkannte Dissonanz einmalig in diesem Segment.
+
+        Eine Note kann wegen mehrerer Intervallpartner mehrfach als Kandidat
+        auftreten.  Deshalb wird hier nach Objektidentitaet dedupliziert; zwei
+        verschiedene Noten gleicher Tonhoehe bleiben dagegen erhalten.
+        """
+        if not any(gespeichert is dissonanz for gespeichert in self.Dissonante_Noten):
+            self.Dissonante_Noten.append(dissonanz)
+
+    def registriere_dissonanzintervall(
+        self,
+        n1: note.Note,
+        n2: note.Note,
+    ) -> None:
+        """Speichert die beiden Noten eines analysierten Dissonanzintervalls."""
+        if not any(
+            (gespeichert_n1 is n1 and gespeichert_n2 is n2)
+            or (gespeichert_n1 is n2 and gespeichert_n2 is n1)
+            for gespeichert_n1, gespeichert_n2 in self.Dissonante_Intervalle
+        ):
+            self.Dissonante_Intervalle.append((n1, n2))
 
     def enthält(self, offset, tol: float = 1e-6) -> bool:
         """Halboffene Zugehoerigkeit: ``Anfang <= offset < Ende``."""
@@ -131,6 +159,25 @@ class HarmonischerKontext:
         # Kein automatisch bestimmbarer harmonischer Slice: Der Standardmodus
         # bleibt dennoch bekannt, wie zuvor durch den Rest der Hilfsstimme.
         return modusbereich
+
+    def dissonanzsegmente(self) -> list[Harmoniesegment]:
+        """Gibt alle Segmente mit gespeicherten Dissonanznoten zurueck.
+
+        Neben der normalen Segmentliste werden auch Standard-Modusbereiche
+        beruecksichtigt, die ``segment_bei`` als Rueckfall liefert, wenn kein
+        automatischer harmonischer Kontext gebildet werden konnte.
+        """
+        if not self._erstellt:
+            self.erstelle_segmente()
+
+        ergebnis: list[Harmoniesegment] = []
+        bekannte_ids: set[int] = set()
+        for segment in self.Segmente + self._modusbereiche:
+            segment_id = id(segment)
+            if segment.Dissonante_Noten and segment_id not in bekannte_ids:
+                bekannte_ids.add(segment_id)
+                ergebnis.append(segment)
+        return sorted(ergebnis, key=lambda segment: (segment.Anfang, segment.Ende))
 
     def _modusbereich_bei(self, offset) -> Optional[Harmoniesegment]:
         for segment in self._modusbereiche:
