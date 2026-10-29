@@ -269,13 +269,12 @@ def Standart_Analyse(
                     if any(gespeicherte_note is frühere_note for gespeicherte_note in intervall)
                 ]
                 bildet_akkord = any(
-                    (Klang := chord.Chord([*intervall, kurzer_note])).isTriad()
-                    or Klang.isIncompleteSeventh()
+                    (Klang := chord.Chord([*intervall, kurzer_note])).isIncompleteSeventh()
                     for intervall in frühere_intervalle
                 )
                 if not bildet_akkord:
-                    return Ergebnis_speichern(kurzer_note)
-
+                    return kurzer_note
+        
         return Ergebnis_speichern(Dissonanz_über_Annotationston)
     
     n1_ist_Transition = ist_Transition(n1, score_slices, modus="Original_Slices")
@@ -286,7 +285,9 @@ def Standart_Analyse(
 
     if kurzer_note:
         return Ergebnis_speichern(kurzer_note)
+    
     print("unbekannte Dissonanz",n1.Takt_Nr, n1.offset_Takt,n1,n2)
+    return n1
     
 
 
@@ -322,7 +323,7 @@ def konsonante_Sprung(kurzer_note,langer_note,Annotationston,score_slices,Akkord
             return kurzer_note
     return False
 
-def ist_zusätzliche_Ton_konsonant(Note,Klang):
+def ist_zusätzliche_Ton_konsonant(Note,Klang,Modus=None,Original_Slices=None):
     Klang1 = chord.Chord([Note, *Klang.notes])
     if Klang1.isConsonant():
         return True
@@ -330,6 +331,10 @@ def ist_zusätzliche_Ton_konsonant(Note,Klang):
         if Note.pitch == Klang1.third:
             return True
         if Klang1.fifth and Note.pitch == Klang1.fifth and Klang1.intervalFromChordStep(5).simpleName=="P5":
+            return True
+    if Modus and Modus == 'Alberti_mit_Kontrapunkt':
+        Töne = Noten_am_Offset(Original_Slices,Note.offset)
+        if chord.Chord(Töne).isConsonant():
             return True
     return False
 

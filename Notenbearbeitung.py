@@ -1,8 +1,46 @@
+from bisect import bisect_left
+
 from music21 import stream, note, chord,interval
 from collections import defaultdict
 from RhytmischeAnalyse import Bestimme_Taktzeit
 INTEGRATION_TOL = 1e-6
 BOUNDARY_TOL = 1e-6
+
+
+class SliceSammlung(list):
+    """Liste von Zeitslices mit wiederverwendbaren Suchindizes.
+
+    Die Klasse bleibt vollstaendig listenkompatibel. Dadurch muessen bestehende
+    Aufrufer nicht angepasst werden, waehrend Offset- und Stimmenabfragen nicht
+    bei jedem Aufruf erneut die gesamte Liste durchsuchen muessen.
+    """
+
+    def __init__(self, slices=()):
+        super().__init__(slices)
+        self._offsets = [float(sl["offset"]) for sl in self]
+        self._stimmen_slices = {}
+        self._element_stimmen_schluessel = {}
+
+    def slice_am_offset(self, offset: float, tol: float = INTEGRATION_TOL):
+        offset = float(offset)
+        index = bisect_left(self._offsets, offset)
+        for kandidat in (index, index - 1):
+            if (
+                0 <= kandidat < len(self)
+                and abs(self._offsets[kandidat] - offset) <= tol
+            ):
+                return self[kandidat]
+        return None
+
+    def slices_im_bereich(
+        self,
+        t0: float,
+        t1: float,
+        tol: float = INTEGRATION_TOL,
+    ):
+        anfang = bisect_left(self._offsets, float(t0) - tol)
+        ende = bisect_left(self._offsets, float(t1) - tol)
+        return self[anfang:ende]
 
 
 def Grenzen_aller_Elemente(s: stream.Score):
@@ -108,6 +146,11 @@ def _baue_taktindex(score: stream.Score, pickup_qL: float | None = None):
     return idx
 
 
+def baue_taktindex(score: stream.Score, Auftakt=None):
+    """Erzeugt den innerhalb einer Analyse gemeinsam genutzten Taktindex."""
+    return _baue_taktindex(score, Auftakt)
+
+
 def _find_measure_for_abs_offset(taktindex: list[dict], abs_off: float) -> tuple[int | None, float | None]:
     
     tol = BOUNDARY_TOL
@@ -136,6 +179,7 @@ def Sammlung_aller_Noten(
     s: stream.Score,
     Auftakt,
     betonungspositionen=None,
+    taktindex=None,
 ) -> list:
     """Sammelt Noten und ergaenzt stabile Analyse-Eigenschaften.
 
@@ -143,7 +187,8 @@ def Sammlung_aller_Noten(
     Gesamtpartitur bestimmt. Der Rhythmus von ``s`` wird hier nicht neu
     analysiert.
     """
-    taktindex = _baue_taktindex(s,Auftakt)
+    if taktindex is None:
+        taktindex = _baue_taktindex(s,Auftakt)
     events = []
 
     def ergänze_Noteneigenschaften(
@@ -190,12 +235,14 @@ def Sammlung_aller_Slice(
     grenzen: list[float],
     Auftakt,
     betonungspositionen=None,
+    taktindex=None,
 ) -> list[dict]:
     grezen = list(sorted(map(float, grenzen)))
     events = Sammlung_aller_Noten(
         s,
         Auftakt,
         betonungspositionen,
+        taktindex,
     )
     out = []
     Noten_im_Slice = []
@@ -221,9 +268,16 @@ def Sammlung_aller_Slice(
         elems = list(Noten_im_Slice)  
         bass = min(elems, key=lambda n: n.pitch.midi) if elems else None
         out.append({'offset': a, 'elements': elems, 'bass': bass})
-    return out
+    return SliceSammlung(out)
 
 def Noten_am_Offset(Slice_Sammlung: list[dict], offset: float) -> list|None:
+    if isinstance(Slice_Sammlung, SliceSammlung):
+        slice_am_offset = Slice_Sammlung.slice_am_offset(offset)
+        return (
+            list(slice_am_offset["elements"])
+            if slice_am_offset is not None
+            else None
+        )
     for d in Slice_Sammlung:
         if abs(d['offset'] - offset) <= INTEGRATION_TOL:
             return list(d['elements'])
@@ -239,9 +293,12 @@ def _Slices_der_Stimme(Ton: note.Note, Original_Slices: list[dict]) -> list[dict
     if Ton is None or not Original_Slices:
         return []
 
-    Zielstimme = Ton.getContextByClass(stream.Part)
-    if Zielstimme is None:
-        return []
+    stimmen_cache = getattr(Original_Slices, "_stimmen_slices", None)
+    element_cache = getattr(
+        Original_Slices,
+        "_element_stimmen_schluessel",
+        None,
+    )
 
     def normalisierte_Stimmen_ID(Stimme):
         Stimmen_ID = getattr(Stimme, "id", None)
@@ -250,16 +307,29 @@ def _Slices_der_Stimme(Ton: note.Note, Original_Slices: list[dict]) -> list[dict
         Stimmen_ID = str(Stimmen_ID)
         return Stimmen_ID[:-5] if Stimmen_ID.endswith("_flat") else Stimmen_ID
 
+    def stimmenschluessel(Element):
+        element_id = id(Element)
+        if element_cache is not None and element_id in element_cache:
+            return element_cache[element_id]
+        Stimme = Element.getContextByClass(stream.Part)
+        Stimmen_ID = normalisierte_Stimmen_ID(Stimme)
+        schluessel = Stimmen_ID if Stimmen_ID is not None else id(Stimme)
+        if element_cache is not None:
+            element_cache[element_id] = schluessel
+        return schluessel
+
+    Zielstimme = Ton.getContextByClass(stream.Part)
+    if Zielstimme is None:
+        return []
     Zielstimmen_ID = normalisierte_Stimmen_ID(Zielstimme)
+    Zielschluessel = (
+        Zielstimmen_ID if Zielstimmen_ID is not None else id(Zielstimme)
+    )
+    if stimmen_cache is not None and Zielschluessel in stimmen_cache:
+        return stimmen_cache[Zielschluessel]
 
     def ist_in_Zielstimme(Element):
-        Stimme = Element.getContextByClass(stream.Part)
-        if Stimme is Zielstimme:
-            return True
-        return (
-            Zielstimmen_ID is not None
-            and normalisierte_Stimmen_ID(Stimme) == Zielstimmen_ID
-        )
+        return stimmenschluessel(Element) == Zielschluessel
 
     Stimmen_Slices = []
     for Slice in Original_Slices:
@@ -274,7 +344,10 @@ def _Slices_der_Stimme(Ton: note.Note, Original_Slices: list[dict]) -> list[dict
             if Elemente else None
         )
         Stimmen_Slices.append(Stimmen_Slice)
-    return Stimmen_Slices
+    ergebnis = SliceSammlung(Stimmen_Slices)
+    if stimmen_cache is not None:
+        stimmen_cache[Zielschluessel] = ergebnis
+    return ergebnis
 
 
 def ist_Transition(Zielnote: note.Note, Quelle, modus="Hilfstimme",
@@ -533,7 +606,11 @@ def ist_Konsonantes_Intervall(note1,note2,Bass):
 def notes_in_time_span(cache_slices: list[dict], t0: float, t1: float, TOL: float = 1e-6):
     collected = []
     seen_ids = set()
-    for sl in cache_slices:
+    if isinstance(cache_slices, SliceSammlung):
+        relevante_slices = cache_slices.slices_im_bereich(t0, t1, TOL)
+    else:
+        relevante_slices = cache_slices
+    for sl in relevante_slices:
         off = float(sl['offset'])
         if t0 - TOL <= off < t1 - TOL:
             for el in sl.get('elements', []):

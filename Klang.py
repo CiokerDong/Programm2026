@@ -229,7 +229,7 @@ def Beurteilung_dissonanten_Klangs(
         Terz = note.Note( Klanggerüst.third) if Klanggerüst.third else None
         Quinte = note.Note(Klanggerüst.fifth) if Klanggerüst.fifth else None
         Septime = note.Note(Klanggerüst.seventh) if Klanggerüst.seventh else None
-
+        result['akkordtöne'] = Klanggerüst.notes
 
     def Annotationston_ist_Transition():
         if Hilfstimme_Kontext is None:
