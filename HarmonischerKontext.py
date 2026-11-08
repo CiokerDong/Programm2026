@@ -41,10 +41,12 @@ class Harmoniesegment:
     Annotationston: Optional[note.Note] = None
     Klang: Optional[chord.Chord] = None
     Klanggerüst: Optional[chord.Chord] = None
+    Harmoniegerüst: Any= None
     Tönenamen: Any = None
-    Klangdissonanzname: Any = None
+    Akkorddissonanzname: Any = None
     Akkordeigene_Töne: Any = None
     Akkorddissonanz: Any = None
+    Rohegerüst: Optional[chord.Chord] = None
     Töne_am_Anfang: Any = None
     Zahl: Optional[int] = None
     Kategorie: Any = None
@@ -302,8 +304,10 @@ class HarmonischerKontext:
             Original_Slices=self.Original_Slices,
         )
         akkorddissonanz = Beurteilung.get("dissonant_notes")
-        
+        dissonantklangnamen = []
         akkordeigene_töne = Beurteilung.get("akkordtöne")
+        if akkorddissonanz:
+            dissonantklangnamen = [n.name for n in akkorddissonanz]
         kategorie = Beurteilung.get("category")
         klanggerüst = chord.Chord(list(akkordeigene_töne))
         töne_am_modusanfang = [
@@ -342,15 +346,18 @@ class HarmonischerKontext:
             Ende=ende,
             Kennzeichen=kennzeichen,
             HarmonieAnfang=anfang,
+            Harmoniegerüst=akkordeigene_töne,
             Klanggerüst=klanggerüst,
             Töne_am_Anfang=klanggerüst_alle,
             Zahl=zahl,
+            Rohegerüst=klanggerüst_roh,
             Kategorie=kategorie,
             Annotationston=annotationston,
             Hilfstimme_Kontext=hilfstimme_kontext,
             Bass=basston,
             Akkordeigene_Töne=akkordeigene_töne,
             Akkorddissonanz=akkorddissonanz,
+            Akkorddissonanzname=dissonantklangnamen
         )
 
     def _erstelle_figurationssegment(
@@ -380,14 +387,16 @@ class HarmonischerKontext:
             Original_Slices=self.Original_Slices,
         )
         klangdissonanz = beurteilung.get("dissonant_notes")
+        dissonantklangnamen = []
         if klangdissonanz:
             konsonant = False
             akkorddissonanz = klangdissonanz
+            dissonantklangnamen = [n.name for n in klangdissonanz]
             akkordeigene_töne = beurteilung.get("akkordtöne")
         else:
             konsonant = True
             akkorddissonanz = None
-            akkordeigene_töne = None
+            akkordeigene_töne = zum_akkord.notes
 
         return Harmoniesegment(
             Modus="Figuration",
@@ -396,12 +405,14 @@ class HarmonischerKontext:
             Kennzeichen=kennzeichen,
             HarmonieAnfang=anfang,
             Qualität=konsonant,
+            Harmoniegerüst=akkordeigene_töne,
             Annotationston=annotationston,
             Hilfstimme_Kontext=hilfstimme_kontext,
             Bass=basston,
             Klang=zum_akkord,
             Akkordeigene_Töne=akkordeigene_töne,
             Akkorddissonanz=akkorddissonanz,
+            Akkorddissonanzname=dissonantklangnamen,
         )
 
     def _erstelle_standardsegmente(self) -> list[Harmoniesegment]:
@@ -468,10 +479,11 @@ class HarmonischerKontext:
                     Original_Slices=self.Original_Slices,
                 )
                 dissonantklang = beurteilung.get("dissonant_notes")
-                dissonantklangnamen = [n.name for n in dissonantklang]
+                dissonantklangnamen = []
+                Akkordeigene_Töne = beurteilung.get("akkordtöne")
                 if dissonantklang:
-                    tönenamen = [n.name for n in beurteilung.get("akkordtöne")]
-
+                    tönenamen = [n.name for n in Akkordeigene_Töne]
+                    dissonantklangnamen = [n.name for n in dissonantklang]
                 effektiver_anfang = max(Harmonieanfang, bereich.Anfang)
                 effektives_ende = min(Harmonieende, bereich.Ende)
                 if effektives_ende <= effektiver_anfang:
@@ -485,7 +497,8 @@ class HarmonischerKontext:
                     Gerüstbass=gerüstbass,
                     Klang=chord.Chord(töne_am_anfang),
                     Tönenamen=tönenamen,
-                    Klangdissonanzname=dissonantklangnamen,
+                    Harmoniegerüst=Akkordeigene_Töne,
+                    Akkorddissonanzname=dissonantklangnamen,
                     hat_harmonischen_kontext=True,
                 )
                 segmente.append(aktiver_slice)

@@ -1,9 +1,9 @@
 
 from music21 import chord, interval, converter, note, stream
 import music21_chord_extensions  # Register the project's Chord.isIncompleteSeventh method.
-from Notenbearbeitung import Noten_am_Offset,notes_in_time_span,ist_Transition
-from Klang import Wie_ein_Klang_aufgelöst,Beurteilung_dissonanten_Klangs
-
+from Notenbearbeitung import Noten_am_Offset,notes_in_time_span,ist_Transition,ist_Konsonantes_Intervall
+from Klang import Wie_ein_Klang_aufgelöst
+from itertools import combinations
 
 def Dissonanz_Finden(chordified_stream): 
     """
@@ -269,9 +269,12 @@ def Standart_Analyse(
                     if any(gespeicherte_note is frühere_note for gespeicherte_note in intervall)
                 ]
                 bildet_akkord = any(
-                    (Klang := chord.Chord([*intervall, kurzer_note])).isIncompleteSeventh()
+                    (
+                        Klang := chord.Chord([*intervall, kurzer_note])
+                    ).isIncompleteSeventh() or Klang.isSeventh()
                     for intervall in frühere_intervalle
                 )
+
                 if not bildet_akkord:
                     return kurzer_note
         
@@ -345,19 +348,61 @@ def konsonante_Quarte(Kategorie,Quarte,Bass):
     return False
 
 
-def Grundton_Vierklang(n,Klang,Töne_im_Bereich,Original_Slices):
+def Einton_Vierklang(n,Klang,Töne_im_Bereich,Original_Slices,Suche=None):
     Klang1 = chord.Chord([n, *Klang.notes])
-    if not ((Klang1.isSeventh() or Klang1.isIncompleteSeventh()) and n.pitch== Klang1.root()):
+    if  Suche == "Grundtonsuche":
+        if not ((Klang1.isSeventh() or Klang1.isIncompleteSeventh()) and n.pitch== Klang1.root()):
+            return None
+        Töne=[]
+        parent = n.getContextByClass(stream.Part)
+        for n1 in Töne_im_Bereich:
+            Stimme=n1.getContextByClass(stream.Part)
+            if Stimme == parent:
+                Töne.append(n1)
+        Auflösung=Wie_ein_Klang_aufgelöst("allgemeiner Klang",Töne,None,None,n)
+        Transitution=ist_Transition(n, Original_Slices, modus="Original_Slices")
+        if Auflösung == "Grundton" and not Transitution:
+            return n
         return None
-    Töne=[]
-    parent = n.getContextByClass(stream.Part)
-    for n1 in Töne_im_Bereich:
-        Stimme=n1.getContextByClass(stream.Part)
-        if Stimme == parent:
-            Töne.append(n1)
-    Auflösung=Wie_ein_Klang_aufgelöst("allgemeiner Klang",Töne,None,None,n)
-    Transitution=ist_Transition(n, Original_Slices, modus="Original_Slices")
+    
+    elif Suche == "Terzsuche":
+        if (Klang1.isSeventh() or Klang1.isIncompleteSeventh()) and n.pitch== Klang1.third:
+            return n
+        return None
 
-    if Auflösung == "Grundton" and not Transitution:
-        return n
-    return None
+
+def Dissonanzanalyse_für_konsonanten_Klang(Töne_am_Offset, Annotationston, Original_Slices, Segment=None):
+    Dissonanzen = []
+    Bass = min(Töne_am_Offset, key=lambda n: n.pitch.midi)
+
+    # Zuerst nur dissonante Intervalle innerhalb des Original-Slices finden.
+    for n, n2 in combinations(Töne_am_Offset, 2):
+        if ist_Konsonantes_Intervall(n, n2, Bass):
+            continue
+        # Erst danach beide Intervalltöne mit dem Annotationston vergleichen.
+        Dissonanz = Standart_Analyse(n, n2, Original_Slices, None, Annotationston, Segment=Segment)
+        if Dissonanz is None:
+            print('none!!!!!!!!!',n.Takt_Nr,n.offset_Takt,n,n2,Annotationston.offset)
+        PartnerTon = n2 if Dissonanz.name == n.name else n
+        Dissonanzen.append({'Dissonanz': Dissonanz, 'Partnerton': PartnerTon})
+    return Dissonanzen
+
+def Dissonanzanalyse_für_dissonanten_Klang(Töne_am_Anfang,Klanggerüst,Akkordtonnamen,Akkorddissonanz,Original_Slices,Annotationston,Modus=None,Segment=None):
+    Dissonanzen=[]
+    Bass = min(Töne_am_Anfang, key=lambda n: n.pitch.midi)
+    for a, b in combinations(Töne_am_Anfang, 2):
+        if ist_Konsonantes_Intervall(a, b, Bass):
+            continue
+        Unterer = min(a, b, key=lambda n: n.pitch.midi)
+        Oberer = max(a, b, key=lambda n: n.pitch.midi)
+        a_Akk = a.name in Akkordtonnamen
+        b_Akk = b.name in Akkordtonnamen
+        if a_Akk and b_Akk:
+            Dissonanz = next((Ton for Ton in (a, b) if Ton.name in Akkorddissonanz),Unterer,)
+        else:
+            Dissonanz = Standart_Analyse(
+                a, b, Original_Slices, Modus, Annotationston, Akkorddissonanz, Segment
+            )
+        PartnerTon = b if Dissonanz.name == a.name else a
+        Dissonanzen.append({'Dissonanz': Dissonanz, 'Partnerton': PartnerTon})
+    return Dissonanzen

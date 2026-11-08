@@ -2,7 +2,7 @@ from bisect import bisect_left
 
 from music21 import stream, note, chord,interval
 from collections import defaultdict
-from RhytmischeAnalyse import Bestimme_Taktzeit
+from Rhythmus_und_Takt import Bestimme_Taktzeit
 INTEGRATION_TOL = 1e-6
 BOUNDARY_TOL = 1e-6
 
@@ -618,3 +618,5 @@ def notes_in_time_span(cache_slices: list[dict], t0: float, t1: float, TOL: floa
                     seen_ids.add(id(el))
                     collected.append(el)
     return collected
+
+

@@ -145,6 +145,9 @@ def ist_Ein_Septakkord(Klang,Zahl=None,Töne_im_Bereich=None,Offset=None,bearbei
                 return 34
             elif Septime.name == Bass.name:
                 if Terz:
+                    if Töne_im_Bereich:
+                        Auflösung = Wie_ein_Klang_aufgelöst('24',Töne_im_Bereich,None,Grundton,Terz,Offset=None)
+                        return 24 if Auflösung == '24' else False
                     return 24
                 elif Quinte:
                     if Töne_im_Bereich:
@@ -170,7 +173,7 @@ def Beurteilung_dissonanten_Klangs(
     Objekt, Zahl=None, Kennzeichen=None, Modusanfang=None, Töne_im_Bereich=None,
     Hilfstimme_Kontext=None, Original_Slices=None
 ):
-    from Dissonanzanalyse import Grundton_Vierklang
+    from Dissonanzanalyse import Einton_Vierklang
     if not isinstance(Objekt, chord.Chord):
         raise TypeError
     
@@ -198,18 +201,25 @@ def Beurteilung_dissonanten_Klangs(
     bearbeitete_Akkord = False
     if (Objekt.isTriad() or len(Akkord.notes) == 2) and Töne_im_Bereich:
         for n in Töne_im_Bereich:
-            gefundenerGrundton=Grundton_Vierklang(n,Objekt,Töne_im_Bereich,Original_Slices)
+            gefundenerGrundton=Einton_Vierklang(n,Objekt,Töne_im_Bereich,Original_Slices,"Grundtonsuche")
             if gefundenerGrundton:
                 Objekt = chord.Chord(list(Objekt.notes) + [gefundenerGrundton])
                 bearbeitete_Akkord = True
                 break
-
+    elif len(Akkord.notes) == 2 and Akkord.intervalFromChordStep(7) and Töne_im_Bereich:
+        for n in Töne_im_Bereich:
+            gefundeneTerz=Einton_Vierklang(n,Objekt,Töne_im_Bereich,Original_Slices,"Terzsuche")
+            if gefundeneTerz:
+                Objekt = chord.Chord(list(Objekt.notes) + [gefundeneTerz])
+                bearbeitete_Akkord = True
+                break
+                
     Umkehrung = Objekt.inversion()
     Alle_Akkordtöne=list(Objekt.notes)
     Akkord = Objekt.closedPosition()
     Akkordtöne = list(Akkord.notes)
 
-    result['akkordtöne'] = Akkordtöne
+    result['akkordtöne'] = Alle_Akkordtöne
 
     oberste_note = max(Alle_Akkordtöne, key=lambda n: n.pitch.midi)
     Basston = min(Alle_Akkordtöne, key=lambda n: n.pitch.midi)
@@ -217,7 +227,7 @@ def Beurteilung_dissonanten_Klangs(
     Quinte = note.Note(Objekt.fifth) if Objekt.fifth else None
     Septime = note.Note(Objekt.seventh) if Objekt.seventh else None
 
-    if Zahl is None:
+    if Zahl is None or Zahl==0:
         Zahl = Generalbassbezifferung(Akkordtöne, Basston)
 
     Septakkord=ist_Ein_Septakkord(Objekt,Zahl,Töne_im_Bereich,Modusanfang,bearbeitete_Akkord)
@@ -296,7 +306,19 @@ def Beurteilung_dissonanten_Klangs(
         elif Zahl == 45:
             Quarte = finden_Note_über_Bass(Akkord, 4)
             result['dissonant_notes'] = [Quarte]
-
+            
+        elif Zahl in [247,27]:
+            Quarte = finden_Note_über_Bass(Akkord, 4)
+            Sekunde = finden_Note_über_Bass(Akkord, 2)
+            Septime = finden_Note_über_Bass(Akkord, 7)
+            result['dissonant_notes'] = [Sekunde,Quarte,Septime]
+            Akkord=chord.Chord(Töne_im_Bereich)
+            Quinte = finden_Note_über_Bass(Akkord, 5)
+            Basston = min(Akkord, key=lambda n: n.pitch.midi)
+            if Quinte and interval.Interval(Basston,Quinte).simpleName=="P5":
+                Akkordtöne.append(Quinte)
+            result['akkordtöne'] = Akkordtöne
+            
     return result
 
 def Beurteilung_dissonanten_Klangs2(Objekt,Vollständigung=None,Anfang=None,Grenzen=None,score_slices=None,
@@ -1083,6 +1105,43 @@ def Wie_ein_Klang_aufgelöst(Klang,Noten_im_Bereich,Note1=None,Note2=None,Note3=
             return "36"
         else:
             return "26"
+
+    elif Klang=="24":
+        Sekunde=Note2
+        Quarte=Note3
+        #print([n.nameWithOctave for n in Noten_im_Bereich],Sekunde.nameWithOctave)
+        Sekunde_candidates = []
+        Quarte_candidates = []
+        Primecandidates = []
+        Terz_candidates = []
+
+        for n in Noten_im_Bereich:
+            if n.nameWithOctave==Sekunde.nameWithOctave:
+                Sekunde_candidates.append(n)
+            if n.nameWithOctave==Quarte.nameWithOctave:
+                Quarte_candidates.append(n)
+        #print(Sekunde_candidates)
+        Sekunde_note = sorted(Sekunde_candidates, key=lambda n: (n.offset, n.pitch.midi))[0]
+        Sekunde_end = Sekunde_note.offset + Sekunde_note.quarterLength
+        Quarte_note = sorted(Quarte_candidates, key=lambda n: (n.offset, n.pitch.midi))[0]
+        Quarte_end = Quarte_note.offset + Quarte_note.quarterLength
+        for n in Noten_im_Bereich:
+            Intevall_mit_Sekunde = interval.Interval(Sekunde_note, n)
+            Intervall_mit_Quarte= interval.Interval(Quarte, n)
+            if n.offset >= Sekunde_end and Intevall_mit_Sekunde.generic.directed == -2:
+                Primecandidates.append(n)
+            elif n.offset >= Quarte_end and Intervall_mit_Quarte.generic.directed == -2:
+                Terz_candidates.append(n)
+
+        offset_letzter_2 =  max((n.offset for n in Sekunde_candidates), default=None)
+        offset_letzter_4 =  max((n.offset for n in Quarte_candidates), default=None)
+        offset_letzter_1 = max((n.offset for n in Primecandidates), default=None)
+        offset_letzter_3 = max((n.offset for n in Terz_candidates), default=None)
+        
+        if offset_letzter_1 and offset_letzter_3:
+            if offset_letzter_1 > offset_letzter_2 and offset_letzter_3 > offset_letzter_4:
+                return "24-3"
+        return "24"
 
     elif Klang=="47":
         # Möglichkeit: 46, 37 or 47
