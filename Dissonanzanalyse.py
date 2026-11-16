@@ -361,10 +361,9 @@ def Einton_Vierklang(n,Klang,Töne_im_Bereich,Original_Slices,Suche=None):
                 Töne.append(n1)
         Auflösung=Wie_ein_Klang_aufgelöst("allgemeiner Klang",Töne,None,None,n)
         Transitution=ist_Transition(n, Original_Slices, modus="Original_Slices")
-        if Auflösung == "Grundton" and not Transitution:
+        if Auflösung == "Grundton":
             return n
         return None
-    
     elif Suche == "Terzsuche":
         if (Klang1.isSeventh() or Klang1.isIncompleteSeventh()) and n.pitch== Klang1.third:
             return n

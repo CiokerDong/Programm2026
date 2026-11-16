@@ -292,6 +292,7 @@ class HarmonischerKontext:
         töne_am_modusanfang = list(
             Noten_am_Offset(self.Original_Slices, anfang) or []
         )
+        töne_am_modusanfang = [n for n in töne_am_modusanfang if not n.duration.isGrace]
         namen_im_klanggerüst = {n.name for n in klanggerüst_roh.notes}
         hilfstimme_kontext = (annotationston, elemente, i0)
         Beurteilung = Beurteilung_dissonanten_Klangs(
@@ -373,6 +374,7 @@ class HarmonischerKontext:
         töne_am_modusanfang = list(
             Noten_am_Offset(self.Original_Slices, anfang) or []
         )
+        töne_am_modusanfang = [n for n in töne_am_modusanfang if not n.duration.isGrace]
         zum_akkord = chord.Chord(töne_am_modusanfang)
         basston = min(element.notes, key=lambda n: n.pitch.midi) if element.isChord else element
         annotationston = basston

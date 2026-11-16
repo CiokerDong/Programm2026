@@ -146,7 +146,7 @@ def ist_Ein_Septakkord(Klang,Zahl=None,Töne_im_Bereich=None,Offset=None,bearbei
             elif Septime.name == Bass.name:
                 if Terz:
                     if Töne_im_Bereich:
-                        Auflösung = Wie_ein_Klang_aufgelöst('24',Töne_im_Bereich,None,Grundton,Terz,Offset=None)
+                        Auflösung = Wie_ein_Klang_aufgelöst('24',Töne_im_Bereich,Bass,Grundton,Terz,Offset=None)
                         return 24 if Auflösung == '24' else False
                     return 24
                 elif Quinte:
@@ -201,6 +201,9 @@ def Beurteilung_dissonanten_Klangs(
     bearbeitete_Akkord = False
     if (Objekt.isTriad() or len(Akkord.notes) == 2) and Töne_im_Bereich:
         for n in Töne_im_Bereich:
+            if n.duration.isGrace:
+                continue
+            #print("DEBUG: Suche nach Grundton für Akkord", Modusanfang,Objekt,Töne_im_Bereich)
             gefundenerGrundton=Einton_Vierklang(n,Objekt,Töne_im_Bereich,Original_Slices,"Grundtonsuche")
             if gefundenerGrundton:
                 Objekt = chord.Chord(list(Objekt.notes) + [gefundenerGrundton])
@@ -208,6 +211,8 @@ def Beurteilung_dissonanten_Klangs(
                 break
     elif len(Akkord.notes) == 2 and Akkord.intervalFromChordStep(7) and Töne_im_Bereich:
         for n in Töne_im_Bereich:
+            if n.duration.isGrace:
+                continue
             gefundeneTerz=Einton_Vierklang(n,Objekt,Töne_im_Bereich,Original_Slices,"Terzsuche")
             if gefundeneTerz:
                 Objekt = chord.Chord(list(Objekt.notes) + [gefundeneTerz])
@@ -234,13 +239,12 @@ def Beurteilung_dissonanten_Klangs(
 
     if Septakkord and Zahl not in Septakkordzieffer:
         Klanggerüst = Bildung_Klanggerüst(Töne_im_Bereich, Septakkord, Basston)
-        Namen_im_Klanggerüst = {n.name for n in Klanggerüst.notes}
         Grundton = note.Note( Klanggerüst.root()) if  Klanggerüst.root() else None
         Terz = note.Note( Klanggerüst.third) if Klanggerüst.third else None
         Quinte = note.Note(Klanggerüst.fifth) if Klanggerüst.fifth else None
         Septime = note.Note(Klanggerüst.seventh) if Klanggerüst.seventh else None
         result['akkordtöne'] = Klanggerüst.notes
-
+    
     def Annotationston_ist_Transition():
         if Hilfstimme_Kontext is None:
             return False
@@ -1107,20 +1111,27 @@ def Wie_ein_Klang_aufgelöst(Klang,Noten_im_Bereich,Note1=None,Note2=None,Note3=
             return "26"
 
     elif Klang=="24":
+        Basston=Note1
         Sekunde=Note2
         Quarte=Note3
         #print([n.nameWithOctave for n in Noten_im_Bereich],Sekunde.nameWithOctave)
         Sekunde_candidates = []
         Quarte_candidates = []
+        Basston_candidates = []
         Primecandidates = []
         Terz_candidates = []
+        Bassauflösung_abwärts = []
 
         for n in Noten_im_Bereich:
+            if n.nameWithOctave==Basston.nameWithOctave:
+                Basston_candidates.append(n)
             if n.nameWithOctave==Sekunde.nameWithOctave:
                 Sekunde_candidates.append(n)
             if n.nameWithOctave==Quarte.nameWithOctave:
                 Quarte_candidates.append(n)
         #print(Sekunde_candidates)
+        Basston_note = sorted(Basston_candidates, key=lambda n: (n.offset, n.pitch.midi))[0]
+        Basston_end = Basston_note.offset + Basston_note.quarterLength
         Sekunde_note = sorted(Sekunde_candidates, key=lambda n: (n.offset, n.pitch.midi))[0]
         Sekunde_end = Sekunde_note.offset + Sekunde_note.quarterLength
         Quarte_note = sorted(Quarte_candidates, key=lambda n: (n.offset, n.pitch.midi))[0]
@@ -1128,19 +1139,25 @@ def Wie_ein_Klang_aufgelöst(Klang,Noten_im_Bereich,Note1=None,Note2=None,Note3=
         for n in Noten_im_Bereich:
             Intevall_mit_Sekunde = interval.Interval(Sekunde_note, n)
             Intervall_mit_Quarte= interval.Interval(Quarte, n)
+            Intevall_mit_Basston= interval.Interval(Basston_note, n)
             if n.offset >= Sekunde_end and Intevall_mit_Sekunde.generic.directed == -2:
                 Primecandidates.append(n)
             elif n.offset >= Quarte_end and Intervall_mit_Quarte.generic.directed == -2:
                 Terz_candidates.append(n)
-
+            elif n.offset >= Basston_end and Intevall_mit_Basston.generic.directed == 2:        
+                Bassauflösung_abwärts.append(n)
         offset_letzter_2 =  max((n.offset for n in Sekunde_candidates), default=None)
         offset_letzter_4 =  max((n.offset for n in Quarte_candidates), default=None)
         offset_letzter_1 = max((n.offset for n in Primecandidates), default=None)
         offset_letzter_3 = max((n.offset for n in Terz_candidates), default=None)
-        
+        offset_letzter_Bass = max((n.offset for n in Basston_candidates ), default=None)
+        offset_letzter_Bassauflösung = max((n.offset for n in Bassauflösung_abwärts), default=None)
+
         if offset_letzter_1 and offset_letzter_3:
             if offset_letzter_1 > offset_letzter_2 and offset_letzter_3 > offset_letzter_4:
                 return "24-3"
+        if offset_letzter_Bassauflösung and offset_letzter_Bassauflösung > offset_letzter_Bass:
+                return "3"
         return "24"
 
     elif Klang=="47":
@@ -1424,7 +1441,7 @@ def Wie_ein_Klang_aufgelöst(Klang,Noten_im_Bereich,Note1=None,Note2=None,Note3=
         Grundnote = sorted(Grunton_candidates, key=lambda n: (n.offset, n.pitch.midi))[0]
         Grundton_end=Grundnote.offset + Grundnote.quarterLength
         offset_letzter_Grundton = max(n.offset for n in Grunton_candidates)
-
+        
         for n in Noten_im_Bereich:
             Intevall_mit_Grundton= interval.Interval(Grundton, n)
             if n.offset >= Grundton_end and Intevall_mit_Grundton.generic.directed == -2:
@@ -1445,6 +1462,7 @@ def Wie_ein_Klang_aufgelöst(Klang,Noten_im_Bereich,Note1=None,Note2=None,Note3=
                 else:
                     return "Grundton" 
         elif Auflösungston_candidates and Auflösungston2_candidates:
+            
             offset_letzter_Auflösungston = max(n.offset for n in Auflösungston_candidates)
             offset_letzter_Auflösungston2 = max(n.offset for n in Auflösungston2_candidates)
             if offset_letzter_Auflösungston > offset_letzter_Grundton or offset_letzter_Auflösungston2 > offset_letzter_Grundton:
