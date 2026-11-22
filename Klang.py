@@ -171,7 +171,7 @@ def ist_Ein_Septakkord(Klang,Zahl=None,Töne_im_Bereich=None,Offset=None,bearbei
     
 def Beurteilung_dissonanten_Klangs(
     Objekt, Zahl=None, Kennzeichen=None, Modusanfang=None, Töne_im_Bereich=None,
-    Hilfstimme_Kontext=None, Original_Slices=None
+    Hilfstimme_Kontext=None, Original_Slices=None, Annotationston=None
 ):
     from Dissonanzanalyse import Einton_Vierklang
     if not isinstance(Objekt, chord.Chord):
@@ -204,7 +204,10 @@ def Beurteilung_dissonanten_Klangs(
             if n.duration.isGrace:
                 continue
             #print("DEBUG: Suche nach Grundton für Akkord", Modusanfang,Objekt,Töne_im_Bereich)
-            gefundenerGrundton=Einton_Vierklang(n,Objekt,Töne_im_Bereich,Original_Slices,"Grundtonsuche")
+            gefundenerGrundton=Einton_Vierklang(
+                n, Objekt, Töne_im_Bereich, Original_Slices,
+                "Grundtonsuche", Annotationston
+            )
             if gefundenerGrundton:
                 Objekt = chord.Chord(list(Objekt.notes) + [gefundenerGrundton])
                 bearbeitete_Akkord = True
@@ -214,7 +217,10 @@ def Beurteilung_dissonanten_Klangs(
         for n in Töne_im_Bereich:
             if n.duration.isGrace:
                 continue
-            gefundeneTerz=Einton_Vierklang(n,Objekt,Töne_im_Bereich,Original_Slices,"Terzsuche")
+            gefundeneTerz=Einton_Vierklang(
+                n, Objekt, Töne_im_Bereich, Original_Slices,
+                "Terzsuche", Annotationston
+            )
             if gefundeneTerz:
                 Objekt = chord.Chord(list(Objekt.notes) + [gefundeneTerz])
                 bearbeitete_Akkord = True
@@ -1341,6 +1347,7 @@ def Wie_ein_Klang_aufgelöst(Klang,Noten_im_Bereich,Note1=None,Note2=None,Note3=
             Bassauflösung = False
             Sekundauflösung_aufwärts = False
             Quintauflösung = False
+
             if Terz_unter_Bass_candidates and offset_letzter_unter3 > offset_letzter_1:
                 Bassauflösung = True
            

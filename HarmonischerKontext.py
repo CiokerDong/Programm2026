@@ -251,6 +251,46 @@ class HarmonischerKontext:
             )
 
         modi.sort(key=lambda segment: segment.Anfang)
+
+        # Nicht auswertbare Grund-Slices werden an den unmittelbar vorherigen
+        # Modusbereich angehängt. Ein Grund-Slice ist auswertbar, wenn am
+        # Anfang mindestens zwei Originalstimmen erklingen.
+        erweiterte_modi: list[Harmoniesegment] = []
+        for index, ausschnitt in enumerate(modi):
+            nächstes_segment = modi[index + 1] if index + 1 < len(modi) else None
+            limit = (
+                float(nächstes_segment.Anfang)
+                if nächstes_segment is not None
+                else float(self.Grenzen[-1])
+            )
+
+            cursor = float(ausschnitt.Ende)
+            i = 0
+            while i < len(self.Grenzen) - 1:
+                grundanfang = float(self.Grenzen[i])
+                grundende = float(self.Grenzen[i + 1])
+
+                if grundende <= cursor + 1e-9:
+                    i += 1
+                    continue
+                if grundanfang >= limit - 1e-9:
+                    break
+
+                originaltöne = Noten_am_Offset(
+                    self.Original_Slices,
+                    grundanfang,
+                )
+                if originaltöne and len(originaltöne) >= 2:
+                    break
+
+                cursor = max(cursor, grundende)
+                i += 1
+
+            ausschnitt.Ende = cursor
+            erweiterte_modi.append(ausschnitt)
+
+        modi = erweiterte_modi
+
         zusammensetzung: list[Harmoniesegment] = []
         for ausschnitt in modi:
             if (
@@ -302,6 +342,7 @@ class HarmonischerKontext:
             töne_im_bereich,
             Hilfstimme_Kontext=hilfstimme_kontext,
             Original_Slices=self.Original_Slices,
+            Annotationston=annotationston,
         )
         akkorddissonanz = Beurteilung.get("dissonant_notes")
         dissonantklangnamen = []
@@ -386,6 +427,7 @@ class HarmonischerKontext:
             töne_im_bereich,
             Hilfstimme_Kontext=hilfstimme_kontext,
             Original_Slices=self.Original_Slices,
+            Annotationston=annotationston,
         )
         klangdissonanz = beurteilung.get("dissonant_notes")
         dissonantklangnamen = []
@@ -478,6 +520,7 @@ class HarmonischerKontext:
                     None,
                     töne_im_bereich,
                     Original_Slices=self.Original_Slices,
+                    Annotationston=gerüstbass,
                 )
                 dissonantklang = beurteilung.get("dissonant_notes")
                 dissonantklangnamen = []

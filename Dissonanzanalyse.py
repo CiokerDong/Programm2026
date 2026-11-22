@@ -1,9 +1,9 @@
-
 from music21 import chord, interval, converter, note, stream
 import music21_chord_extensions  # Register the project's Chord.isIncompleteSeventh method.
 from Notenbearbeitung import Noten_am_Offset,notes_in_time_span,ist_Transition,ist_Konsonantes_Intervall
 from Klang import Wie_ein_Klang_aufgelöst
 from itertools import combinations
+import math
 
 def Dissonanz_Finden(chordified_stream): 
     """
@@ -348,11 +348,14 @@ def konsonante_Quarte(Kategorie,Quarte,Bass):
     return False
 
 
-def Einton_Vierklang(n,Klang,Töne_im_Bereich,Original_Slices,Suche=None):
+def Einton_Vierklang(n,Klang,Töne_im_Bereich,Original_Slices,Suche=None, Annotationston=None):
+    
     Klang1 = chord.Chord([n, *Klang.notes])
-    if  Suche == "Grundtonsuche":
-        if not ((Klang1.isSeventh() or Klang1.isIncompleteSeventh()) and n.pitch== Klang1.root()):
+    if Suche == "Grundtonsuche":
+        if not ((Klang1.isSeventh() or Klang1.isIncompleteSeventh()) and n.pitch == Klang1.root()):
             return None
+        if Annotationston and n.quarterLength == Annotationston.quarterLength:
+            return n
         Töne=[]
         parent = n.getContextByClass(stream.Part)
         for n1 in Töne_im_Bereich:
