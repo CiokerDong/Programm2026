@@ -361,7 +361,7 @@ def Einton_Vierklang(n,Klang,Töne_im_Bereich,Original_Slices,Suche=None):
                 Töne.append(n1)
         Auflösung=Wie_ein_Klang_aufgelöst("allgemeiner Klang",Töne,None,None,n)
         Transitution=ist_Transition(n, Original_Slices, modus="Original_Slices")
-        if Auflösung == "Grundton":
+        if Auflösung == "Grundton" and not Transitution:
             return n
         return None
     elif Suche == "Terzsuche":

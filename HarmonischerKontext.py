@@ -30,7 +30,6 @@ class Harmoniesegment:
     Dictionaries.  ``get`` und ``__getitem__`` erleichtern die schrittweise
     Migration bestehender Aufrufer.
     """
-
     Modus: str
     Anfang: float
     Ende: float
@@ -495,6 +494,7 @@ class HarmonischerKontext:
                     Anfang=effektiver_anfang,
                     Ende=effektives_ende,
                     HarmonieAnfang=Harmonieanfang,
+                    Annotationston=gerüstbass,
                     Bass=gerüstbass,
                     Gerüstbass=gerüstbass,
                     Klang=chord.Chord(töne_am_anfang),
