@@ -47,6 +47,7 @@ class Harmoniesegment:
     Akkorddissonanz: Any = None
     Rohegerüst: Optional[chord.Chord] = None
     Töne_am_Anfang: Any = None
+    fehlt_Bass:Any=None
     Zahl: Optional[int] = None
     Kategorie: Any = None
     Qualität: Optional[bool] = None
@@ -401,6 +402,32 @@ class HarmonischerKontext:
             Akkorddissonanzname=dissonantklangnamen
         )
 
+    def _finde_figurations_rohgerüst(
+        self,
+        anfang: float,
+        ende: float,
+        annotationston: note.Note,
+    ) -> Optional[chord.Chord]:
+        """Bildet das Figurations-Rohgerüst erst beim Annotationston-Einsatz."""
+        offsets = [float(anfang)]
+        offsets.extend(
+            float(grenze)
+            for grenze in self.Grenzen
+            if grenze > anfang + 1e-9 and grenze < ende - 1e-9
+        )
+
+        for offset in offsets:
+            töne_am_offset = list(
+                Noten_am_Offset(self.Original_Slices, offset) or []
+            )
+
+            if any(
+                ton.nameWithOctave == annotationston.nameWithOctave
+                for ton in töne_am_offset
+            ):
+                return chord.Chord(töne_am_offset)
+
+
     def _erstelle_figurationssegment(
         self,
         element,
@@ -412,15 +439,26 @@ class HarmonischerKontext:
         töne_im_bereich,
     ) -> Harmoniesegment:
         töne_am_modusanfang = list(
-            Noten_am_Offset(self.Original_Slices, anfang) or []
+            Noten_am_Offset(self.Original_Slices, anfang) 
         )
         töne_am_modusanfang = [n for n in töne_am_modusanfang if not n.duration.isGrace]
-        zum_akkord = chord.Chord(töne_am_modusanfang)
+        Akkord=chord.Chord(töne_am_modusanfang)
+        es_fehlt_Bass_amAnfang=False
+        if len(töne_am_modusanfang) <2:
+            es_fehlt_Bass_amAnfang=True
+        
         basston = min(element.notes, key=lambda n: n.pitch.midi) if element.isChord else element
         annotationston = basston
+        rohegerüst = self._finde_figurations_rohgerüst(
+            anfang,
+            ende,
+            annotationston,
+        )
+        if rohegerüst:
+            Akkord=rohegerüst
         hilfstimme_kontext = (annotationston, elemente, i0)
         beurteilung = Beurteilung_dissonanten_Klangs(
-            zum_akkord,
+            Akkord,
             None,
             kennzeichen,
             anfang,
@@ -439,7 +477,7 @@ class HarmonischerKontext:
         else:
             konsonant = True
             akkorddissonanz = None
-            akkordeigene_töne = zum_akkord.notes
+            akkordeigene_töne = Akkord.notes
 
         return Harmoniesegment(
             Modus="Figuration",
@@ -449,10 +487,12 @@ class HarmonischerKontext:
             HarmonieAnfang=anfang,
             Qualität=konsonant,
             Harmoniegerüst=akkordeigene_töne,
+            Rohegerüst=rohegerüst,
+            fehlt_Bass=es_fehlt_Bass_amAnfang,
             Annotationston=annotationston,
             Hilfstimme_Kontext=hilfstimme_kontext,
             Bass=basston,
-            Klang=zum_akkord,
+            Klang=Akkord,
             Akkordeigene_Töne=akkordeigene_töne,
             Akkorddissonanz=akkorddissonanz,
             Akkorddissonanzname=dissonantklangnamen,

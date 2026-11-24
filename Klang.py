@@ -11,7 +11,7 @@ def index_von_offset(Grenzen, offset, tol=1e-6):
         return i
     if i > 0 and math.isclose(Grenzen[i-1], float(offset), abs_tol=tol):
         return i - 1
-    raise ValueError(f"offset {offset} 不在 Grenzen 中（tol={tol}）")
+    raise ValueError(f"offset {offset} 不在 Grenzen 中(tol={tol})")
 
 def Intervalls_von_Basston_im_Akkord(ch):
     bass = ch.bass()
@@ -160,12 +160,13 @@ def ist_Ein_Septakkord(Klang,Zahl=None,Töne_im_Bereich=None,Offset=None,bearbei
         Zufällige_Dissonanz=True
         Intervalle=Intervalls_von_Basston_im_Akkord(Einfachklang)
         Intervallzahle = ''.join(str(i.generic.value) for i in Intervalle)
+        
         if Intervallzahle in ['26','67','57','47']:
             Note1 = Bass
             Note2 = finden_Note_über_Bass(Klang, int(Intervallzahle[0]))
             Note3 = finden_Note_über_Bass(Klang, int(Intervallzahle[1]))
             Auflösung = Wie_ein_Klang_aufgelöst(Intervallzahle,Töne_im_Bereich,Note1,Note2,Note3,Offset)
-            if Auflösung in ['24','26','57','37']:
+            if Auflösung in ['24','26','57','37','46']:
                 return int(Auflösung)
     return False
     
@@ -211,7 +212,7 @@ def Beurteilung_dissonanten_Klangs(
             if gefundenerGrundton:
                 Objekt = chord.Chord(list(Objekt.notes) + [gefundenerGrundton])
                 bearbeitete_Akkord = True
-                print("DEBUG: Beurteilung_dissonanten_Klangs: Akkord mit Intervall von 5:",Modusanfang,Objekt)
+                
                 break
     elif len(Akkord.notes) == 2 and Akkord.intervalFromChordStep(7) and Töne_im_Bereich:
         for n in Töne_im_Bereich:
@@ -246,6 +247,8 @@ def Beurteilung_dissonanten_Klangs(
 
     if Septakkord and Zahl not in Septakkordzieffer:
         Klanggerüst = Bildung_Klanggerüst(Töne_im_Bereich, Septakkord, Basston)
+        Akkord = Klanggerüst.closedPosition()
+        Umkehrung = Akkord.inversion()
         Grundton = note.Note( Klanggerüst.root()) if  Klanggerüst.root() else None
         Terz = note.Note( Klanggerüst.third) if Klanggerüst.third else None
         Quinte = note.Note(Klanggerüst.fifth) if Klanggerüst.fifth else None
@@ -294,7 +297,7 @@ def Beurteilung_dissonanten_Klangs(
                         result['dissonant_notes'] = [Quinte]
                 elif Akkord.isDiminishedTriad():
                     result['dissonant_notes'] = [Quinte]
-                elif Zahl == 46:
+                elif Umkehrung == 2:
                     if  Annotationston_ist_Transition():
                         result['dissonant_notes'] = [Basston]
                         result['category']='46'
